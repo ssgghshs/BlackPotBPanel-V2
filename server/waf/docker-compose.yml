@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  openresty:
+    image: blackpotbpanel-waf:latest
+    container_name: waf-openresty
+    restart: unless-stopped
+    pull_policy: never
+    network_mode: host
+    privileged: true
+    volumes:
+      # OpenResty主配置文件
+      - ./conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      # 错误页面配置文件
+      - ./conf/error_locations.conf:/usr/local/openresty/nginx/conf/error_locations.conf:ro
+      # 站点配置文件
+      - ./sites/conf:/usr/local/openresty/nginx/conf/conf.d:ro
+      # 静态网站文件
+      - ./sites/www:/usr/local/openresty/nginx/html:ro
+      # 站点日志文件
+      - ./sites/sitelogs:/usr/local/openresty/nginx/sitelogs
+      # SSL证书
+      - ./ssl:/usr/local/openresty/nginx/ssl:ro
+      # 防护规则配置
+      - ./rules:/usr/local/openresty/nginx/rules:ro
+      # Lua脚本
+      - ./lua:/usr/local/openresty/nginx/lua:ro
+      # WAF自定义页面（拦截页面、人机验证页面）
+      - ./html:/usr/local/openresty/nginx/waf_html:ro
+      # GeoIP数据库
+      - ./data:/usr/local/openresty/nginx/data:ro
+      # 日志文件
+      - ./logs:/usr/local/openresty/nginx/logs
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

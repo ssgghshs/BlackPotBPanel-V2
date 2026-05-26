@@ -1,0 +1,6 @@
+{
+    "enabled": true,
+    "max_requests": 100,
+    "time_window": 60,
+    "block_duration": 300
+}

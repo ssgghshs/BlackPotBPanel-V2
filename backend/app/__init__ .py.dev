@@ -1,0 +1,54 @@
+#开发
+# app/__init__.py
+from fastapi import FastAPI
+from app.user.routers import router as user_router
+from app.system.routers import router as system_router
+from app.log.routers import router as log_router
+from app.monitor.routers import router as monitor_router
+from app.file.routers import router as file_router
+from app.host.routers import router as host_router
+from app.container.routers import router as container_router
+from app.script.routers import router as script_router
+from app.firewall.routers import router as firewall_router
+from app.waf.routers import router as waf_router
+from app.service.routers import router as service_router
+from app.crontab.routers import router as crontab_router
+from app.database.routers import router as database_router
+
+
+
+import config.settings
+
+def create_app():
+    # 从配置中获取文档设置
+    enable_docs = config.settings.settings.ENABLE_DOCS
+    
+    app = FastAPI(
+        title=config.settings.settings.APP_NAME,
+        description="BlackPotBPanel backend API",
+        version=config.settings.settings.VERSION,
+        debug=config.settings.settings.DEBUG,
+        docs_url="/docs" if enable_docs else None,
+        redoc_url="/redoc" if enable_docs else None,
+        openapi_url="/openapi.json" if enable_docs else None
+    )
+    
+
+    
+    # 注册路由
+    app.include_router(user_router)
+    app.include_router(system_router)
+    app.include_router(log_router)
+    app.include_router(monitor_router)
+    app.include_router(file_router)
+    app.include_router(host_router)
+    app.include_router(container_router)
+    app.include_router(script_router)
+    app.include_router(firewall_router)
+    app.include_router(waf_router)
+    app.include_router(service_router)
+    app.include_router(crontab_router)
+    app.include_router(database_router)
+    
+        
+    return app

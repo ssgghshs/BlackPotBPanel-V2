@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "normal_routes": [
+
+  ],
+  "static_paths": [
+    "/assets/",
+    "/static/",
+    "/images/",
+    "/img/",
+    "/css/",
+    "/js/",
+    "/fonts/",
+    "/uploads/",
+    "/media/"
+  ],
+  "static_extensions": [
+
+  ]
+}

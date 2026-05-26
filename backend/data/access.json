@@ -1,0 +1,4 @@
+{
+  "access_log_path": "/opt/blackpotbpanel-v2/server/waf/logs/access.log",
+  "error_log_path": "/opt/blackpotbpanel-v2/server/waf/logs/error.log"
+}

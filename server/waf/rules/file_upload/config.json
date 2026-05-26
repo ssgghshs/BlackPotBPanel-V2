@@ -1,0 +1,35 @@
+{
+  "enabled": true,
+  "max_file_size": 10485760,
+  "check_content": true,
+  "allowed_extensions": [
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
+    ".pdf", ".txt", ".csv", ".doc", ".docx", ".xls", ".xlsx"
+  ],
+  "forbidden_extensions": [
+    ".php", ".php3", ".phtml", ".phar", ".jsp", ".jspx", ".asp", ".aspx", 
+    ".cgi", ".exe", ".bat", ".sh", ".py", ".pl", ".js", ".html", ".htm"
+  ],
+  "allowed_types": [
+    "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"
+  ],
+  "forbidden_types": [
+    "application/x-php", "text/php", "application/x-executable", "text/javascript"
+  ],
+  "forbidden_content": [
+    "<?php",
+    "<?=",
+    "eval(",
+    "system(",
+    "shell_exec(",
+    "passthru(",
+    "base64_decode(",
+    "gzuncompress(",
+    "exec(",
+    "python_eval",
+    "<script"
+  ],
+  "exclude_paths": [
+    "/admin/config_upload"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "rules": [
+    "<(s(?:cript|tyle)|i(?:frame|mg)|o(?:bject|nload)|video|audio|details|svg|body|html|meta|link|embed|canvas|base|frameset)",
+    "on\\w+\\s*=",
+    "on\\w+\\s*\\(",
+    "(?:javascript|vbscript|data)\\s*:",
+    "\\b(eval|setInterval|setTimeout|Function|prompt|confirm|alert)\\s*\\(",
+    "document\\.(?:write|writeln|location|cookie|domain|body\\.innerHTML|createElement)",
+    "(?:window|self|parent|top|frames)\\.(?:location|name|opener|localStorage|sessionStorage)",
+    "style\\s*=\\s*['\"].*?(?:expression|behavior|url)\\s*\\(",
+    "expression\\s*\\(",
+    "String\\.fromCharCode\\s*\\(",
+    "atob\\s*\\(\\s*['\"]",
+    "base64\\s*,",
+    "<!--[\\s\\S]*?-->",
+    "\\{\\{.*?\\.constructor.*?\\}\\}",
+    "(?:\\%3C|\\x3C)[^\\s]*?(?:\\%3E|\\x3E)"
+  ]
+}

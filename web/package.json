@@ -1,0 +1,32 @@
+{
+  "name": "BlackPotPanel",
+  "private": true,
+  "version": "0.0.2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "@arco-design/web-vue": "^2.57.0",
+    "@visactor/vchart-arco-theme": "^1.12.2",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "axios": "^1.12.2",
+    "echarts-gl": "^2.0.9",
+    "echarts5": "npm:echarts@^5.6.0",
+    "element-plus": "^2.11.4",
+    "monaco-editor": "^0.54.0",
+    "router": "^2.2.0",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.3",
+    "monaco-editor-webpack-plugin": "^7.1.1",
+    "vite": "^6.3.5"
+  }
+}

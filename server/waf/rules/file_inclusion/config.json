@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "rules": [
+    "\\.\\.\\/",
+    "\\.\\.\\\\",
+    "\\b(file|phar|zip|rar|tar|jar|php|data|expect):\\/\\/",
+    "^\\/(etc|proc|var|opt|boot|root|home|usr|bin|sbin|dev|sys|lib|tmp)\\/",
+    "^[a-zA-Z]:\\\\(windows|winnt|system32|program|users|boot)\\b",
+    "\\/etc\\/(passwd|shadow|group|hosts|issue|config)",
+    "\\/proc\\/(self|\\d+)\\/(environ|cmdline|fd|status|maps)",
+    "\\b(win\\.ini|boot\\.ini|web\\.config|httpd\\.conf|nginx\\.conf)\\b",
+    "\\/var\\/log\\/(messages|auth\\.log|syslog|nginx|apache2|httpd)"
+  ],
+  "exclude_paths": [
+    "^/api/upload/",
+    "^/api/files/"
+  ]
+}

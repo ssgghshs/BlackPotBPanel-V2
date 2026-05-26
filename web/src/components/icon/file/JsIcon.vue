@@ -1,0 +1,58 @@
+<template>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    :viewBox="'0 0 1024 1024'"
+    :style="iconStyle"
+    version="1.1"
+    p-id="8790"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+  >
+    <path
+      d="M0 0h1024v1024H0z"
+      p-id="8791"
+      :fill="props.color"
+    ></path>
+    <path
+      d="M688 800c20.48 33.6 47.36 58.56 95.04 58.56 40 0 65.28-19.84 65.28-47.36 0-32.96-26.24-44.8-70.08-64l-24-10.24c-69.44-29.44-115.52-66.56-115.52-144.96 0-72.32 55.04-127.04 140.8-127.04 61.12 0 105.28 21.44 136.96 77.12l-74.88 48c-16.64-29.44-34.24-41.28-62.08-41.28-28.16 0-46.08 17.92-46.08 41.28 0 28.8 17.92 40.64 59.2 58.56l24 10.24c81.6 35.2 128 70.72 128 151.04 0 86.72-68.16 134.08-159.36 134.08-89.28 0-147.2-42.56-175.36-98.56L688 800z m-340.16 8.32c15.04 26.88 28.8 49.6 62.08 49.6 31.68 0 51.52-12.48 51.52-60.48V470.08h96.32v328.64c0 99.52-58.56 144.96-143.68 144.96-77.12 0-121.6-40-144.32-88l78.08-47.36z"
+      p-id="8792"
+      fill="#000000"
+    ></path>
+  </svg>
+</template>
+
+<script setup>
+import { defineProps, computed } from 'vue'
+
+const props = defineProps({
+  size: {
+    type: [Number, String],
+    default: 15
+  },
+  color: {
+    type: String,
+    default: '#F7DF1E'
+  },
+  spin: {
+    type: Boolean,
+    default: false
+  }
+})
+
+const iconStyle = computed(() => ({
+  width: typeof props.size === 'number' ? `${props.size}px` : props.size,
+  height: typeof props.size === 'number' ? `${props.size}px` : props.size,
+  color: props.color,
+  animation: props.spin ? 'spin 1s infinite linear' : 'none'
+}))
+</script>
+
+<style scoped>
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

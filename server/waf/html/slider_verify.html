@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Verification - Web Application Firewall</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .container { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); max-width: 500px; width: 100%; padding: 30px; text-align: center; }
+        .icon { width: 80px; height: 80px; background: #667eea; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+        .icon svg { width: 40px; height: 40px; fill: white; }
+        h1 { color: #333; font-size: 24px; margin-bottom: 15px; }
+        p { color: #666; font-size: 14px; line-height: 1.6; margin: 10px 0; }
+        .hint { font-size: 12px; color: #999; margin-top: 15px; }
+        .slider-container { position: relative; width: 100%; height: 50px; background: #e8e8e8; border-radius: 25px; overflow: hidden; margin: 20px 0; border: 2px solid #dcdcdc; transition: border-color 0.3s, background 0.3s; }
+        .slider-track-progress { position: absolute; top: 0; left: 0; height: 100%; width: 0; background: linear-gradient(90deg, #e8e0ff, #c8d0ff); border-radius: 25px 0 0 25px; transition: width 0.05s linear; pointer-events: none; }
+        .slider-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #aaa; font-size: 14px; pointer-events: none; user-select: none; transition: opacity 0.3s; z-index: 1; }
+        .slider-button { position: absolute; top: -2px; left: -2px; width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; cursor: grab; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); z-index: 2; transition: box-shadow 0.3s, transform 0.2s; }
+        .slider-button::after { content: '→'; color: white; font-size: 20px; font-weight: bold; }
+        .slider-button:hover { box-shadow: 0 6px 20px rgba(102, 126, 234, 0.55); transform: scale(1.05); }
+        .slider-button:active { box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6); transform: scale(1.08); background: linear-gradient(135deg, #5568d3 0%, #6a3f8a 100%); }
+        .success { background: #e8f5e9 !important; border-color: #81c784 !important; }
+        .success .slider-track-progress { background: linear-gradient(90deg, #c8e6c9, #a5d6a7); }
+        .success .slider-button { background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%) !important; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4) !important; animation: successPulse 0.6s ease-out; }
+        .success .slider-text { opacity: 0; }
+        .slider-button.success-icon::after { content: '✓'; font-size: 22px; }
+        @keyframes successPulse { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        .progress { margin-top: 20px; font-size: 14px; color: #667eea; }
+        @media (max-width: 480px) {
+            .container { padding: 20px; }
+            .icon { width: 60px; height: 60px; }
+            .icon svg { width: 30px; height: 30px; }
+            h1 { font-size: 20px; }
+            .slider-container { height: 45px; }
+            .slider-button { width: 45px; height: 45px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+            </svg>
+        </div>
+        <h1>Security Verification</h1>
+        <p>Please drag the slider to complete verification</p>
+        <p class="hint">This helps us verify that you are a real person</p>
+        <div class="slider-container" id="sliderContainer">
+            <div class="slider-track-progress" id="sliderTrack"></div>
+            <div class="slider-text">Drag slider to verify</div>
+            <div class="slider-button" id="sliderButton"></div>
+        </div>
+        <p class="progress" id="progress">Waiting for verification...</p>
+    </div>
+
+    <script>
+        (function() {
+            var token = "{{token}}";
+            var cookieName = "{{cookie_name}}"; // 动态接收 Cookie 名称
+            var sliderButton = document.getElementById('sliderButton');
+            var sliderContainer = document.getElementById('sliderContainer');
+            var sliderTrack = document.getElementById('sliderTrack');
+            var progress = document.getElementById('progress');
+            var isDragging = false;
+            var startX = 0;
+            var currentX = 0;
+            var containerWidth = sliderContainer.offsetWidth - sliderButton.offsetWidth;
+            var isVerified = false;
+            
+            window.addEventListener('resize', function() {
+                containerWidth = sliderContainer.offsetWidth - sliderButton.offsetWidth;
+                if (!isVerified) { sliderButton.style.left = '0px'; currentX = 0; sliderTrack.style.width = '0px'; }
+            });
+            
+            sliderButton.addEventListener('mousedown', function(e) {
+                if (isVerified) return;
+                isDragging = true;
+                startX = e.clientX - currentX;
+                sliderButton.style.cursor = 'grabbing';
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging || isVerified) return;
+                currentX = e.clientX - startX;
+                if (currentX < 0) currentX = 0;
+                if (currentX > containerWidth) currentX = containerWidth;
+                sliderButton.style.left = currentX + 'px';
+                sliderTrack.style.width = (currentX + sliderButton.offsetWidth / 2) + 'px';
+                var percentage = Math.round((currentX / containerWidth) * 100);
+                progress.textContent = 'Verification: ' + percentage + '%';
+            });
+            
+            document.addEventListener('mouseup', function(e) {
+                if (!isDragging || isVerified) return;
+                isDragging = false;
+                sliderButton.style.cursor = 'grab';
+                if (currentX >= containerWidth - 5) {
+                    verifySuccess();
+                } else {
+                    sliderButton.style.left = '0px';
+                    currentX = 0;
+                    sliderTrack.style.width = '0px';
+                    progress.textContent = 'Failed, please try again';
+                }
+            });
+
+            // 触摸支持
+            sliderButton.addEventListener('touchstart', function(e) {
+                if (isVerified) return;
+                isDragging = true;
+                startX = e.touches[0].clientX - currentX;
+            }, { passive: true });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (!isDragging || isVerified) return;
+                currentX = e.touches[0].clientX - startX;
+                if (currentX < 0) currentX = 0;
+                if (currentX > containerWidth) currentX = containerWidth;
+                sliderButton.style.left = currentX + 'px';
+                sliderTrack.style.width = (currentX + sliderButton.offsetWidth / 2) + 'px';
+            }, { passive: true });
+            
+            document.addEventListener('touchend', function(e) {
+                if (!isDragging || isVerified) return;
+                isDragging = false;
+                if (currentX >= containerWidth - 5) { verifySuccess(); } else { sliderButton.style.left = '0px'; currentX = 0; sliderTrack.style.width = '0px'; }
+            });
+            
+            function verifySuccess() {
+                isVerified = true;
+                sliderContainer.classList.add('success');
+                sliderButton.style.left = containerWidth + 'px';
+                sliderButton.classList.add('success-icon');
+                progress.textContent = 'Verification complete, refreshing...';
+                
+                // 【核心修改】：使用动态 Cookie 名
+                document.cookie = cookieName + "=" + token + "; path=/; max-age=3600; SameSite=Lax";
+                
+                setTimeout(function() {
+                    location.reload(true);
+                }, 600);
+            }
+        })();
+    </script>
+</body>
+</html>

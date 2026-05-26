@@ -1,0 +1,9 @@
+{
+    "enabled": true,
+    "rules": [
+        "[;\\|&!><\\x60\\$\\(\\)]",
+        "\\b(cat|ls|id|whoami|pwd|ifconfig|ipconfig|netstat|uname|ping|curl|wget|nc|bash|sh|php|python|perl|ruby|java|powershell|cmd|net\\s+user)\\b",
+        "/etc/(passwd|shadow|group|hosts|issue)",
+        "\\b(System\\.Diagnostics\\.Process|Runtime\\.getRuntime|exec|eval|passthru|system|shell_exec|popen)\\b"
+    ]
+}

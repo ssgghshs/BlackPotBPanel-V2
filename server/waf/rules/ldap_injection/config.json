@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "rules": [
+    "\\)\\s*\\(\\s*[&|!]\\s*\\(", 
+    "\\(\\s*[&|!]\\s*\\b(?:uid|cn|sn|userPassword|objectClass|mail|memberOf)\\b",
+    "\\*\\s*\\)\\s*\\(\\s*\\b(?:uid|cn|sn|objectClass)\\b\\s*=",
+    "\\b(?:objectClass|uid|cn)\\s*=\\s*\\*",
+    "\\x00",
+    "\\)\\s*\\(\\s*\\b(?:uid|cn|sn|userPassword)\\b\\s*="
+  ]
+}

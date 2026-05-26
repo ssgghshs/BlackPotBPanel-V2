@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "check_origin": true,
+  "check_referer": true,
+  "allowed_origins": [
+
+  ],
+  "allowed_referers": [
+
+  ],
+  "protected_methods": [
+    "POST",
+    "PUT",
+    "DELETE"
+  ],
+  "exclude_paths": [
+    "^/api/public/"
+  ]
+}

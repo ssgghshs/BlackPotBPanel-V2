@@ -1,0 +1,19 @@
+{
+    "enabled": true,
+    "rules": [
+        "\\bunion\\s+(?:all\\s+)?select\\b",
+        "\\bselect\\b.*?\\bfrom\\b",
+        "\\binsert\\s+into\\b.*?\\bvalues\\b",
+        "\\bupdate\\b.*?\\bset\\b",
+        "\\bdelete\\b.*?\\bfrom\\b",
+        "\\b(and|or|xor)\\b\\s+(?:[\\w\\-]+\\s*[\\=\\<\\>]|\\d+\\s*\\=|['\"][^'\"]+['\"]\\s*\\=)",
+        "\\b(extractvalue|updatexml)\\s*\\(",
+        "\\b(sleep|benchmark|waitfor\\s+delay)\\s*\\(",
+        "\\b(group_concat|load_file|database|user|version)\\s*\\(",
+        "\\b(information_schema|mysql\\.user|pg_catalog|pg_sleep)\\b",
+        "(?:['\"\\s]--|['\"\\s]#|\\/\\*.*?\\*\\/)",
+        "\\binto\\s+(?:outfile|dumpfile)\\b",
+        "0x[0-9a-fA-F]{4,}",
+        "\\bexec\\s+(?:xp_cmdshell|sp_executeql)\\b"
+    ]
+}
