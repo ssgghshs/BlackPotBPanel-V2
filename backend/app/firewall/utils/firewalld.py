@@ -1,13 +1,14 @@
 import subprocess
 import os
+import shutil
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
 
 
 class FirewalldManager:
     def __init__(self):
-        self.cmd = "/usr/bin/firewall-cmd"
-        self.systemctl = "/usr/bin/systemctl"
+        self.cmd = shutil.which('firewall-cmd') or "/usr/bin/firewall-cmd"
+        self.systemctl = shutil.which('systemctl') or "/usr/bin/systemctl"
         self.public_xml = "/etc/firewalld/zones/public.xml"
 
     def status(self) -> bool:

@@ -1,17 +1,20 @@
 import subprocess
 import os
+import shutil
 import tempfile
 from typing import List, Dict, Optional
 
 
 class IpsetManager:
     def __init__(self):
-        self.ipset_cmd = "/usr/sbin/ipset"
-        self.iptables_cmd = "/usr/sbin/iptables"
-        self.ip6tables_cmd = "/usr/sbin/ip6tables"
+        self.ipset_cmd = shutil.which('ipset') or "/usr/sbin/ipset"
+        self.iptables_cmd = shutil.which('iptables') or "/usr/sbin/iptables"
+        self.ip6tables_cmd = shutil.which('ip6tables') or "/usr/sbin/ip6tables"
         self._country_chain = "IN_BT_Country"
 
     def _check_ipset_available(self) -> bool:
+        if not self.ipset_cmd:
+            return False
         try:
             subprocess.run([self.ipset_cmd, "version"], capture_output=True, timeout=3)
             return True

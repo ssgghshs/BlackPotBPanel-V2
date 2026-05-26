@@ -1,12 +1,13 @@
 import subprocess
 import re
+import shutil
 from typing import List, Dict
 
 
 class UfwManager:
     def __init__(self):
-        self.cmd = "/usr/sbin/ufw"
-        self.systemctl = "/usr/bin/systemctl"
+        self.cmd = shutil.which('ufw') or "/usr/sbin/ufw"
+        self.systemctl = shutil.which('systemctl') or "/usr/bin/systemctl"
 
     def status(self) -> bool:
         try:

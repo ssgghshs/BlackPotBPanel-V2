@@ -1,12 +1,13 @@
 import subprocess
 import re
+import shutil
 from typing import List, Dict
 
 
 class IptablesManager:
     def __init__(self):
-        self.cmd = "/usr/sbin/iptables"
-        self.systemctl = "/usr/bin/systemctl"
+        self.cmd = shutil.which('iptables') or "/usr/sbin/iptables"
+        self.systemctl = shutil.which('systemctl') or "/usr/bin/systemctl"
 
     def status(self) -> bool:
         try:
