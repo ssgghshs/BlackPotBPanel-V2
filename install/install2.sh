@@ -9,7 +9,7 @@ SERVER_DIR="$BASE_DIR/server"
 CONFIG_FILE="$BASE_DIR/setting.conf"
 SERVICE_FILE="/etc/systemd/system/Blackpotbpanel.service"
 SERVICE_NAME="Blackpotbpanel"
-GIT_REPO_URL="https://gitee.com/ssgghshs/blackpotbpanel-v2.git"
+GIT_REPO_URL="https://github.com/ssgghshs/blackpotbpanel-v2.git"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
