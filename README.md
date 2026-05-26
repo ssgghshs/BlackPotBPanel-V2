@@ -17,7 +17,7 @@ BlackPotBPanel 是一款使用AI仿照BT面板基于vue+fastapi开发的linux管
 | RedHat 8 | ✅ |
 | Rocky Linux 9 | ✅ |
 | CentOS 8 | 待测试 |
-| Debian 12.0 | 待测试 |
+| Debian 12.0 | ✅ |
 | AlmaLinux 8+ | 待测试 |
 --------------
 其余操作系统可尝试手动安装

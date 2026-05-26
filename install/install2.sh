@@ -112,14 +112,14 @@ step_check_system() {
             PKG_MANAGER="apt-get"
             PKG_INSTALL="apt-get install -y"
             PYTHON_PKG="python3 python3-pip python3-venv python3-dev"
-            DEV_PKGS="build-essential libssl-dev libbz2-dev libffi-dev zlib1g-dev libreadline-dev libsqlite3-dev tar"
+            DEV_PKGS="build-essential libssl-dev libbz2-dev libffi-dev zlib1g-dev libreadline-dev libsqlite3-dev tar ipset ufw"
             apt-get update -y
             ;;
         centos|rhel|rocky|almalinux)
             PKG_MANAGER="dnf"
             PKG_INSTALL="dnf install -y"
             PYTHON_PKG="python3 python3-pip python3-devel"
-            DEV_PKGS="gcc gcc-c++ make openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel dejavu-sans-fonts tar"
+            DEV_PKGS="gcc gcc-c++ make openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel dejavu-sans-fonts tar ipset"
             ;;
         *)
             log_error "Unsupported OS: $OS_NAME"
