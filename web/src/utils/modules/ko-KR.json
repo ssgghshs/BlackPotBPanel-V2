@@ -1640,5 +1640,6 @@
   "uid": "UID",
   "superuser": "슈퍼 유저",
   "canCreateDb": "데이터베이스를 생성할 수 있습니다",
-  "panelResource": "패널 리소스 사용"
+  "panelResource": "패널 리소스 사용",
+  "updating": "업데이트 중"
 }   

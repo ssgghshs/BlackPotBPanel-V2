@@ -1629,5 +1629,6 @@
   "uid": "UID",
   "superuser": "超级用户",
   "canCreateDb": "可以创建数据库",
-  "panelResource": "面板资源占用"
+  "panelResource": "面板资源占用",
+  "updating": "更新中"
 }

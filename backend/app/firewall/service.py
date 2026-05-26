@@ -3,6 +3,7 @@ import os
 import json
 import asyncio
 import socket
+import shutil
 from datetime import datetime
 from typing import List, Tuple, Dict, Any
 from fastapi import HTTPException
@@ -39,15 +40,22 @@ class FirewallService:
         if cls._firewall_instance is not None:
             return cls._firewall_instance
 
-        if os.path.exists('/usr/sbin/firewalld') or os.path.exists('/etc/redhat-release'):
+        firewalld_bin = shutil.which('firewall-cmd')
+        ufw_bin = shutil.which('ufw')
+        iptables_bin = shutil.which('iptables')
+
+        if firewalld_bin or os.path.exists('/etc/redhat-release'):
             cls._firewall_instance = FirewalldManager()
             logger.info("检测到系统防火墙: firewalld")
-        elif os.path.exists('/usr/sbin/ufw') or os.path.exists('/usr/bin/apt-get'):
+        elif ufw_bin:
             cls._firewall_instance = UfwManager()
             logger.info("检测到系统防火墙: ufw")
-        else:
+        elif iptables_bin:
             cls._firewall_instance = IptablesManager()
             logger.info("检测到系统防火墙: iptables")
+        else:
+            cls._firewall_instance = IptablesManager()
+            logger.warning("未检测到已知防火墙，默认使用 iptables")
 
         return cls._firewall_instance
 

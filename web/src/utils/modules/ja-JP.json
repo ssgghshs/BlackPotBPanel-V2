@@ -1637,5 +1637,6 @@
   "uid": "UID",
   "superuser": "スーパーユーザー",
   "canCreateDb": "データベースを作成できる",
-  "panelResource": "パネルリソース使用"
+  "panelResource": "パネルリソース使用",
+  "updating": "更新中"
 }

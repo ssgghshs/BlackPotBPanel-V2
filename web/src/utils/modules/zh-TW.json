@@ -1652,5 +1652,6 @@
   "uid": "UID",
   "superuser": "超級用戶",
   "canCreateDb": "可以創建數據庫",
-  "panelResource": "面板資源占用"
+  "panelResource": "面板資源占用",
+  "updating": "更新中"
 }  

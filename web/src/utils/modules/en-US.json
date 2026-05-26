@@ -1617,5 +1617,6 @@
   "uid": "UID",
   "superuser": "Superuser",
   "canCreateDb": "Can Create Database",
-  "panelResource": "Panel Resource"
+  "panelResource": "Panel Resource",
+  "updating": "Updating"
 }
