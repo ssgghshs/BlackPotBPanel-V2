@@ -446,7 +446,7 @@ const createdAtText = computed(() => t.value('createdAt'));
 const actionsText = computed(() => t.value('actions'));
 
 // 表格列定义
-const columns = computed(() => reactive([
+const columns = computed(() => [
   {
     title: idText.value,
     dataIndex: 'script_id',
@@ -479,7 +479,7 @@ const columns = computed(() => reactive([
     slotName: 'actions',
     width: 150
   }
-]));
+]);
 
 
 // 响应式布局相关
@@ -508,7 +508,7 @@ const scriptTypeForm = reactive({
 });
 
 // 脚本类型表单验证规则
-const scriptTypeRules = computed(() => reactive({
+const scriptTypeRules = computed(() => ({
   type_name: [
     { required: true, message: typeNameRequiredText.value }
   ],
@@ -551,7 +551,7 @@ const startExecutionText = computed(() => t.value('startExecution') || '开始�
 const executingText = computed(() => t.value('executing') || '执行中...');
 
 // 脚本类型表格列定义
-const scriptTypeColumns = computed(() => reactive([
+const scriptTypeColumns = computed(() => [
   {
     title: idText.value,
     dataIndex: 'id',
@@ -577,7 +577,7 @@ const scriptTypeColumns = computed(() => reactive([
     slotName: 'actions',
     width: 120
   }
-]));
+]);
 
 // 格式化日期
 const formatDate = (dateString) => {

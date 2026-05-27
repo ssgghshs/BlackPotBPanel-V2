@@ -9,6 +9,13 @@ export function getHosts(params) {
   })
 }
 
+// 获取文件传输专用主机列表（简化版）
+export function getFileTransferHosts() {
+  return request('/host/transferhosts', {
+    method: 'GET',
+  })
+}
+
 // 创建主机
 export function createHost(data) {
   return request('/host/create', {
@@ -205,5 +212,72 @@ export function exportSSHLoginLogs(data) {
     data,
   })
 }
+
+
+//获取远程主机文件列表（通过SSH）
+export function getRemoteFileList(hostId, params) {
+  return request(`/host/${hostId}/files/list`, {
+    method: 'GET',
+    params,
+  })
+}
+
+//在远程主机上创建文件或文件夹（通过SSH）
+export function createRemoteFile(hostId, data) {
+  return request(`/host/${hostId}/files/create`, {
+    method: 'POST',
+    data,
+  })
+}
+
+//上传文件到远程主机（通过SFTP）
+export function uploadFileToRemote(hostId, formData, params) {
+  return request(`/host/${hostId}/files/upload`, {
+    method: 'POST',
+    data: formData,
+    params,
+  })
+}
+
+// 删除远程主机文件/文件夹（通过SSH）
+export function deleteRemoteFile(hostId, data) {
+  return request(`/host/${hostId}/files/delete`, {
+    method: 'POST',
+    data,
+  })
+}
+
+//启动 SCP 文件传输任务，支持双向传输
+export function startSCPTransfer(hostId, data) {
+  return request(`/host/${hostId}/files/scp-transfer`, {
+    method: 'POST',
+    data,
+  })
+}
+
+//取消 SCP 传输任务
+export function cancelSCPTransfer(taskId) {
+  return request(`/host/scp-transfer/${taskId}/cancel`, {
+    method: 'POST',
+  })
+}
+
+
+//WebSocket 实时传输进度
+export function connectSCPProgress(task_id) {
+  // 根据当前页面协议确定WebSocket协议
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  
+  // 构建相对于当前页面的WebSocket URL
+  const basePath = window.location.host; // 获取当前域名和端口
+  const url = `${protocol}//${basePath}/api/v2/host/ws/scp-progress/${task_id}`;
+  
+  // 创建WebSocket连接
+  return new WebSocket(url);
+}
+
+
+
+
 
 

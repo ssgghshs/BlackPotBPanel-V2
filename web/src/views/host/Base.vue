@@ -4,6 +4,7 @@
       <ul>
         <li><router-link to="/host/terminal">{{ t('terminal') }}</router-link></li>
         <li><router-link to="/host/hosts">{{ t('hosts') }}</router-link></li>
+        <li><router-link to="/host/filetransfer">{{ t('fileTransfer') }}</router-link></li>      
         <li><router-link to="/host/crontab">{{ t('crontabTask') }}</router-link></li>        
         <li><router-link to="/host/scripts">{{ t('scripts') }}</router-link></li>
       </ul>

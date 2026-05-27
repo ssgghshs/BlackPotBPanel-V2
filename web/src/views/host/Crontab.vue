@@ -214,6 +214,7 @@ import {
   clearCrontabTaskLog
 } from '../../api/crontab'
 import { Message } from '@arco-design/web-vue'
+import { IconExclamationCircle } from '@arco-design/web-vue/es/icon'
 
 const taskData = ref([])
 const typeOptions = ref([])

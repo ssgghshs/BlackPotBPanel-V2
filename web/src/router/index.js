@@ -15,6 +15,7 @@ const routes = [
           {path: 'hosts', name: 'Hosts', component: () => import('../views/host/Hosts.vue'), meta: { title: '主机管理' }} ,
           {path: 'scripts', name: 'Scripts', component: () => import('../views/host/Scripts.vue'), meta: { title: '脚本库' }} ,
           {path: 'crontab', name: 'Crontab', component: () => import('../views/host/Crontab.vue'), meta: { title: '定时任务' }} ,
+          {path: 'filetransfer', name: 'FileTransfer', component: () => import('../views/host/FileTransfer.vue'), meta: { title: '文件传输' }} ,
         ]
       },
       {path: 'logs', name: 'Logs', component: () => import('../views/logs/Base.vue'),redirect: '/logs/systemlog', meta: { title: '日志审计' },
