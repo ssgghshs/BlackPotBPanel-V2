@@ -3,7 +3,8 @@ SSH连接服务模块
 """
 import paramiko
 import asyncio
-from typing import Optional, Tuple, Any
+import os
+from typing import Optional, Tuple, Any, Callable
 import logging
 from io import StringIO
 from paramiko import RSAKey, Ed25519Key, DSSKey, ECDSAKey
@@ -255,3 +256,290 @@ class SSHService:
         
         # 在线程池中执行阻塞的SSH连接操作
         return await asyncio.get_event_loop().run_in_executor(None, _connect_and_execute)
+
+    @staticmethod
+    async def upload_file_sftp(
+        host: str,
+        port: int,
+        username: str,
+        remote_path: str,
+        file_content: bytes,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_password: Optional[str] = None,
+        timeout: int = 30
+    ) -> Tuple[bool, str]:
+        """
+        通过 SFTP 上传文件到远程主机
+
+        Args:
+            host: 主机地址
+            port: 端口
+            username: 用户名
+            remote_path: 远程目标路径（包含文件名）
+            file_content: 文件二进制内容
+            password: 密码（密码认证时使用）
+            private_key: 私钥内容（密钥认证时使用）
+            private_key_password: 私钥密码（用于解密私钥）
+            timeout: 连接超时时间
+
+        Returns:
+            Tuple[bool, str]: (上传是否成功, 结果信息)
+        """
+        def _upload():
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            try:
+                if password:
+                    ssh_client.connect(
+                        hostname=host,
+                        port=port,
+                        username=username,
+                        password=password,
+                        timeout=timeout
+                    )
+                elif private_key:
+                    pkey = SSHService._load_private_key(private_key, private_key_password)
+                    if pkey:
+                        ssh_client.connect(
+                            hostname=host,
+                            port=port,
+                            username=username,
+                            pkey=pkey,
+                            timeout=timeout
+                        )
+                    else:
+                        return False, "无法加载私钥，不支持的密钥格式或密码错误"
+                else:
+                    return False, "未提供有效的认证信息"
+
+                sftp = ssh_client.open_sftp()
+                try:
+                    with sftp.open(remote_path, 'wb') as f:
+                        f.write(file_content)
+                    return True, f"文件上传成功: {remote_path}"
+                finally:
+                    sftp.close()
+
+            except paramiko.AuthenticationException:
+                return False, "SSH认证失败，请检查用户名和密码/密钥"
+            except paramiko.SSHException as e:
+                return False, f"SSH连接错误: {str(e)}"
+            except IOError as e:
+                return False, f"文件上传失败: {str(e)}"
+            except Exception as e:
+                return False, f"文件上传失败: {str(e)}"
+            finally:
+                ssh_client.close()
+
+        return await asyncio.get_event_loop().run_in_executor(None, _upload)
+
+    @staticmethod
+    async def download_file_sftp(
+        host: str,
+        port: int,
+        username: str,
+        remote_path: str,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_password: Optional[str] = None,
+        timeout: int = 30
+    ) -> Tuple[bool, bytes]:
+        """
+        通过 SFTP 从远程主机下载文件
+
+        Args:
+            host: 主机地址
+            port: 端口
+            username: 用户名
+            remote_path: 远程文件路径
+            password: 密码（密码认证时使用）
+            private_key: 私钥内容（密钥认证时使用）
+            private_key_password: 私钥密码（用于解密私钥）
+            timeout: 连接超时时间
+
+        Returns:
+            Tuple[bool, bytes]: (下载是否成功, 文件二进制内容或错误信息)
+        """
+        def _download():
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            try:
+                if password:
+                    ssh_client.connect(
+                        hostname=host,
+                        port=port,
+                        username=username,
+                        password=password,
+                        timeout=timeout
+                    )
+                elif private_key:
+                    pkey = SSHService._load_private_key(private_key, private_key_password)
+                    if pkey:
+                        ssh_client.connect(
+                            hostname=host,
+                            port=port,
+                            username=username,
+                            pkey=pkey,
+                            timeout=timeout
+                        )
+                    else:
+                        return False, "无法加载私钥，不支持的密钥格式或密码错误"
+                else:
+                    return False, "未提供有效的认证信息"
+
+                sftp = ssh_client.open_sftp()
+                try:
+                    with sftp.open(remote_path, 'rb') as f:
+                        data = f.read()
+                    return True, data
+                finally:
+                    sftp.close()
+
+            except paramiko.AuthenticationException:
+                return False, "SSH认证失败，请检查用户名和密码/密钥"
+            except paramiko.SSHException as e:
+                return False, f"SSH连接错误: {str(e)}".encode()
+            except IOError as e:
+                return False, f"文件下载失败: {str(e)}".encode()
+            except Exception as e:
+                return False, f"文件下载失败: {str(e)}".encode()
+            finally:
+                ssh_client.close()
+
+        return await asyncio.get_event_loop().run_in_executor(None, _download)
+
+    @staticmethod
+    async def upload_file_sftp_chunked(
+        local_path: str,
+        host: str,
+        port: int,
+        username: str,
+        remote_path: str,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_password: Optional[str] = None,
+        timeout: int = 60,
+        chunk_size: int = 1024 * 1024,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
+    ) -> Tuple[bool, str]:
+        def _upload_chunked():
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            try:
+                if password:
+                    ssh_client.connect(
+                        hostname=host, port=port, username=username,
+                        password=password, timeout=timeout
+                    )
+                elif private_key:
+                    pkey = SSHService._load_private_key(private_key, private_key_password)
+                    if pkey:
+                        ssh_client.connect(
+                            hostname=host, port=port, username=username,
+                            pkey=pkey, timeout=timeout
+                        )
+                    else:
+                        return False, "无法加载私钥，不支持的密钥格式或密码错误"
+                else:
+                    return False, "未提供有效的认证信息"
+
+                sftp = ssh_client.open_sftp()
+                try:
+                    with open(local_path, 'rb') as loc:
+                        def _cb(x, y):
+                            if cancel_check and cancel_check():
+                                raise Exception("传输已取消")
+                            if progress_callback:
+                                progress_callback(x, y)
+                        sftp.putfo(loc, remote_path, callback=_cb, confirm=False)
+                    return True, f"文件上传成功: {remote_path}"
+                finally:
+                    sftp.close()
+
+            except paramiko.AuthenticationException:
+                return False, "SSH认证失败，请检查用户名和密码/密钥"
+            except paramiko.SSHException as e:
+                return False, f"SSH连接错误: {str(e)}"
+            except IOError as e:
+                return False, f"文件上传失败: {str(e)}"
+            except Exception as e:
+                msg = str(e)
+                if cancel_check and cancel_check():
+                    return False, "传输已取消"
+                return False, f"文件上传失败: {msg}"
+            finally:
+                ssh_client.close()
+
+        return await asyncio.get_event_loop().run_in_executor(None, _upload_chunked)
+
+    @staticmethod
+    async def download_file_sftp_chunked(
+        remote_path: str,
+        local_path: str,
+        host: str,
+        port: int,
+        username: str,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_password: Optional[str] = None,
+        timeout: int = 60,
+        chunk_size: int = 1024 * 1024,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
+    ) -> Tuple[bool, str]:
+        def _download_chunked():
+            ssh_client = paramiko.SSHClient()
+            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            try:
+                if password:
+                    ssh_client.connect(
+                        hostname=host, port=port, username=username,
+                        password=password, timeout=timeout
+                    )
+                elif private_key:
+                    pkey = SSHService._load_private_key(private_key, private_key_password)
+                    if pkey:
+                        ssh_client.connect(
+                            hostname=host, port=port, username=username,
+                            pkey=pkey, timeout=timeout
+                        )
+                    else:
+                        return False, "无法加载私钥，不支持的密钥格式或密码错误"
+                else:
+                    return False, "未提供有效的认证信息"
+
+                sftp = ssh_client.open_sftp()
+                try:
+                    os.makedirs(os.path.dirname(local_path) or '.', exist_ok=True)
+                    with open(local_path, 'wb') as loc:
+                        def _cb(x, y):
+                            if cancel_check and cancel_check():
+                                raise Exception("传输已取消")
+                            if progress_callback:
+                                progress_callback(x, y)
+                        sftp.getfo(remote_path, loc, callback=_cb)
+                    return True, f"文件下载成功: {remote_path}"
+                finally:
+                    sftp.close()
+
+            except paramiko.AuthenticationException:
+                return False, "SSH认证失败，请检查用户名和密码/密钥"
+            except paramiko.SSHException as e:
+                return False, f"SSH连接错误: {str(e)}"
+            except IOError as e:
+                return False, f"文件下载失败: {str(e)}"
+            except Exception as e:
+                msg = str(e)
+                if cancel_check and cancel_check():
+                    return False, "传输已取消"
+                return False, f"文件下载失败: {msg}"
+            finally:
+                ssh_client.close()
+
+        return await asyncio.get_event_loop().run_in_executor(None, _download_chunked)

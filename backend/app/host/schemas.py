@@ -44,6 +44,18 @@ class HostInDB(HostBase):
         from_attributes = True
 
 
+class HostSimple(BaseModel):
+    """主机简化模型，仅包含文件传输所需的字段"""
+    id: int
+    comment: Optional[str] = None
+    address: str
+    username: str
+    port: int = 22
+
+    class Config:
+        from_attributes = True
+
+
 # SSH配置信息相关的 Pydantic 模型
 class SSHConfigInfo(BaseModel):
     install: bool  # 是否安装或存在
@@ -153,3 +165,69 @@ class SSHLogCleanupResponse(BaseModel):
     success: bool = Field(..., description="操作是否成功")
     message: str = Field(..., description="操作结果消息")
     cleaned_count: Optional[int] = Field(default=None, description="已清理的日志数量")
+
+
+# 远程文件相关 Pydantic 模型
+class RemoteFileInfo(BaseModel):
+    """远程主机文件信息模型"""
+    filename: str = Field(..., description="文件名（符号链接格式为 name -> target）")
+    size: str = Field(..., description="格式化后的文件大小，如 1.5 MB")
+    is_directory: bool = Field(..., description="是否为目录")
+    modified_time: str = Field(..., description="修改时间（ISO 格式）")
+    permissions: str = Field(..., description="权限模式，如 755")
+    user: str = Field(..., description="所有者用户名")
+    group: str = Field(..., description="所属组名")
+    is_symlink: bool = Field(..., description="是否为符号链接")
+    target_path: str = Field(..., description="符号链接目标路径")
+    path: str = Field(..., description="完整文件路径")
+
+class RemoteFileListRequest(BaseModel):
+    """远程文件列表请求模型"""
+    path: str = Field(default="/", description="远程主机上的目录路径")
+
+class RemoteFileListResponse(BaseModel):
+    """远程文件列表响应模型"""
+    data: List[RemoteFileInfo] = Field(..., description="文件列表")
+    total: int = Field(..., description="文件总数")
+    skip: int = Field(default=0, description="跳过的记录数")
+    limit: int = Field(default=100, description="返回的记录数")
+
+
+class RemoteFileCreateRequest(BaseModel):
+    """远程主机创建文件/文件夹请求模型"""
+    path: str = Field(..., description="父目录路径，如 /home/user")
+    name: str = Field(..., description="文件或文件夹名称")
+    type: str = Field(default="file", description="创建类型: file(文件) 或 directory(文件夹)")
+    content: Optional[str] = Field(default="", description="文件内容（创建文件时可选）")
+
+
+class RemoteFileCreateResponse(BaseModel):
+    """远程主机创建文件/文件夹响应模型"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="结果消息")
+
+
+class RemoteFileDeleteRequest(BaseModel):
+    """远程主机删除文件/文件夹请求模型"""
+    path: str = Field(..., description="文件或文件夹的完整路径，如 /home/user/test.txt")
+    type: str = Field(default="file", description="删除类型: file(文件) 或 directory(文件夹)")
+
+
+class ScpTransferRequest(BaseModel):
+    """SCP 文件传输请求模型"""
+    direction: str = Field(default="upload", description="传输方向: upload(本地→远程) 或 download(远程→本地)")
+    source_paths: List[str] = Field(..., description="源文件路径列表；upload 时为本地路径，download 时为远程路径")
+    remote_dir: str = Field(..., description="目标目录路径；upload 时为远程目录，download 时为本地目录")
+
+
+class ScpTransferTask(BaseModel):
+    """SCP 传输任务状态模型"""
+    task_id: str = Field(..., description="传输任务ID")
+    status: str = Field(..., description="状态: pending/running/completed/failed/cancelled")
+    progress: float = Field(0, description="总体进度 0-100")
+    current_file: str = Field("", description="当前正在传输的文件名")
+    total_files: int = Field(0, description="文件总数")
+    completed_files: int = Field(0, description="已完成文件数")
+    total_bytes: int = Field(0, description="总字节数")
+    transferred_bytes: int = Field(0, description="已传输字节数")
+    message: str = Field("", description="状态消息")

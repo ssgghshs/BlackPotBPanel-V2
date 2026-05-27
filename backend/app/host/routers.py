@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.host import schemas, service, models
 from app.user import models as user_models
 from config.database import get_db
 from middleware.auth import get_current_active_user
+import asyncio
 import logging
 # 导入解密工具
 from utils.encryption import decrypt_password
@@ -47,6 +48,23 @@ async def read_hosts(
     except Exception as e:
         logger.error(f"获取主机列表失败: {e}")
         raise HTTPException(status_code=500, detail="获取主机列表失败")
+
+
+@router.get("/transferhosts", response_model=List[schemas.HostSimple])
+async def read_file_transfer_hosts(
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """获取文件传输专用主机列表（简化版）
+
+    返回仅包含文件传输所需的字段：id、comment、address、username、port。
+    """
+    try:
+        hosts = await service.get_hosts(db, skip=0, limit=1000)
+        return hosts
+    except Exception as e:
+        logger.error(f"获取文件传输主机列表失败: {e}")
+        raise HTTPException(status_code=500, detail="获取文件传输主机列表失败")
 
 @router.get("/{host_id}/detail", response_model=schemas.HostInDB)
 async def read_host(
@@ -646,4 +664,261 @@ async def export_ssh_logs(
         raise HTTPException(status_code=500, detail=f"导出SSH登录日志失败: {str(e)}")
 
 # 远程文件相关接口
+
+
+@router.get("/{host_id}/files/list")
+async def get_remote_file_list(
+    host_id: int,
+    path: str = "/",
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """获取远程主机文件列表（通过SSH）
+
+    该接口用于通过SSH连接远程主机，获取指定路径下的文件列表。
+    返回格式与本地文件列表接口一致。
+
+    - **host_id**: 主机ID
+    - **path**: 远程路径（Query参数），默认为 /
+    - **skip**: 跳过的记录数，默认为0
+    - **limit**: 返回的记录数，默认为100
+    """
+    try:
+        from app.host.remote_service import get_remote_file_list as _remote_list
+
+        files = await _remote_list(db, host_id, path)
+        total = len(files)
+        start = max(0, skip)
+        end = start + max(0, limit)
+        paged = files[start:end]
+        return {
+            "data": paged,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"获取远程主机文件列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取远程文件列表失败: {str(e)}")
+
+
+@router.post("/{host_id}/files/create", response_model=schemas.RemoteFileCreateResponse)
+async def create_remote_file(
+    host_id: int,
+    req: schemas.RemoteFileCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """在远程主机上创建文件或文件夹（通过SSH）
+
+    该接口用于通过SSH连接远程主机，在指定路径下创建文件或文件夹。
+
+    - **host_id**: 主机ID
+    - **path**: 父目录路径
+    - **name**: 文件或文件夹名称
+    - **type**: 创建类型，file（文件）或 directory（文件夹）
+    - **content**: 文件内容（创建文件时可选）
+    """
+    try:
+        from app.host.remote_service import create_remote_file_or_folder
+
+        result = await create_remote_file_or_folder(
+            db, host_id,
+            path=req.path,
+            name=req.name,
+            type_=req.type,
+            content=req.content or ""
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"远程创建文件/文件夹失败: {e}")
+        raise HTTPException(status_code=500, detail=f"远程创建文件/文件夹失败: {str(e)}")
+
+
+@router.post("/{host_id}/files/upload")
+async def upload_remote_file(
+    host_id: int,
+    file: UploadFile = File(...),
+    path: str = Form("/"),
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """上传文件到远程主机（通过SFTP）
+
+    该接口用于通过SFTP将文件上传到远程主机的指定目录。
+
+    - **host_id**: 主机ID
+    - **file**: 上传的文件（multipart/form-data）
+    - **path**: 远程目标目录路径（Form字段）
+    """
+    if not path or path.strip() == "/":
+        raise HTTPException(status_code=400, detail="Cannot upload file to root directory, please specify a subdirectory")
+
+    try:
+        from app.host.remote_service import upload_file_to_remote
+
+        result = await upload_file_to_remote(
+            db, host_id,
+            remote_dir=path,
+            filename=file.filename or "unknown",
+            file_content=await file.read()
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"上传文件到远程主机失败: {e}")
+        raise HTTPException(status_code=500, detail=f"上传文件到远程主机失败: {str(e)}")
+
+
+@router.post("/{host_id}/files/delete", response_model=schemas.RemoteFileCreateResponse)
+async def delete_remote_file(
+    host_id: int,
+    req: schemas.RemoteFileDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """删除远程主机上的文件或文件夹（通过SSH）
+
+    该接口用于通过SSH连接远程主机，删除指定路径下的文件或文件夹。
+
+    - **host_id**: 主机ID
+    - **path**: 文件或文件夹的完整路径
+    - **type**: 删除类型，file（文件）或 directory（文件夹）
+    """
+    try:
+        from app.host.remote_service import delete_remote_file as _delete_remote
+
+        result = await _delete_remote(
+            db, host_id,
+            path=req.path,
+            type_=req.type
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"删除远程文件/文件夹失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除远程文件/文件夹失败: {str(e)}")
+
+
+@router.post("/{host_id}/files/scp-transfer")
+async def scp_transfer(
+    host_id: int,
+    req: schemas.ScpTransferRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """启动 SCP 文件传输任务，支持双向传输
+
+    支持将本地文件批量传输到远程主机（upload），
+    或将远程主机文件批量下载到本地（download），
+    类似于 `scp file1.py file2.js root@host:/remote/dir/`。
+    立即返回 task_id，实际传输在后台异步执行，
+    进度和结果通过 WebSocket `/ws/scp-progress/{task_id}` 实时推送。
+
+    - **host_id**: 目标主机 ID
+    - **direction**: 传输方向: upload(本地→远程) 或 download(远程→本地)
+    - **source_paths**: 源文件路径列表
+    - **remote_dir**: 目标目录路径
+
+    返回:
+    - **task_id**: 传输任务 ID，用于 WebSocket 连接监听进度
+    """
+    import uuid
+    from app.host.remote_service import _scp_tasks, ScpTransferTask, start_scp_transfer as _start_transfer
+    from config.database import AsyncSessionLocal
+
+    task_id = str(uuid.uuid4())
+
+    pending_task = ScpTransferTask(task_id, host_id, req.source_paths, req.remote_dir)
+    pending_task.status = "pending"
+    pending_task.message = "任务已创建，等待开始传输..."
+    _scp_tasks[task_id] = pending_task
+
+    async def _run_transfer():
+        async with AsyncSessionLocal() as bg_db:
+            await _start_transfer(
+                bg_db, host_id,
+                source_paths=req.source_paths,
+                remote_dir=req.remote_dir,
+                direction=req.direction,
+                task_id=task_id,
+            )
+
+    asyncio.create_task(_run_transfer())
+
+    return {"task_id": task_id}
+
+
+@router.post("/scp-transfer/{task_id}/cancel")
+async def cancel_scp_transfer(
+    task_id: str,
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """取消 SCP 传输任务"""
+    from app.host.remote_service import cancel_scp_task as _cancel
+
+    if _cancel(task_id):
+        return {"success": True, "message": "传输已取消"}
+    raise HTTPException(status_code=400, detail="无法取消该任务，任务可能已完成或不存在")
+
+
+@router.websocket("/ws/scp-progress/{task_id}")
+async def websocket_scp_progress(
+    websocket: WebSocket,
+    task_id: str,
+):
+    """WebSocket 实时传输进度
+
+    通过 WebSocket 持续推送传输进度信息，每次推送包含完整的任务状态 JSON：
+    - task_id: 任务 ID
+    - status: 状态（pending/running/completed/failed/cancelled）
+    - progress: 进度百分比（0-100）
+    - current_file: 当前传输的文件名
+    - total_files: 文件总数
+    - completed_files: 已完成文件数
+    - total_bytes: 总字节数
+    - transferred_bytes: 已传输字节数
+    - message: 状态消息
+    """
+    from app.host.remote_service import get_scp_task
+
+    await websocket.accept()
+    try:
+        last_status = None
+        while True:
+            task = get_scp_task(task_id)
+            if not task:
+                await websocket.send_json({
+                    "task_id": task_id,
+                    "status": "not_found",
+                    "message": "传输任务不存在"
+                })
+                break
+
+            data = task.to_dict()
+            if data != last_status:
+                await websocket.send_json(data)
+                last_status = data
+
+            if task.status in ("completed", "failed", "cancelled"):
+                break
+
+            await asyncio.sleep(0.5)
+    except Exception:
+        logger.warning(f"SCP 进度 WebSocket 连接断开: task_id={task_id}")
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 

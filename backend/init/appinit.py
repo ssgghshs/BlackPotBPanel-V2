@@ -81,7 +81,7 @@ async def create_localhost_host():
         # 如果不存在本机配置，则创建一个默认的系统创建记录
         if not localhost_hosts:
             localhost_host = host_models.Host(
-                comment="本机",
+                comment="localhost",
                 address="127.0.0.1",
                 username="root",
                 port=22,
