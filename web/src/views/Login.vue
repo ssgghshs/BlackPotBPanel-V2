@@ -90,10 +90,11 @@
               type="primary" 
               html-type="submit" 
               :loading="loading" 
+              :disabled="lockoutRemaining > 0"
               long
               size="large"
             >
-              {{ loading ? t('loggingIn') : t('login') }}
+              {{ lockoutRemaining > 0 ? t('loginLocked').replace('{seconds}', lockoutRemaining.toString()) : (loading ? t('loggingIn') : t('login')) }}
             </a-button>
           </a-form-item>
         </a-form>
@@ -108,7 +109,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, computed } from 'vue'
+import { reactive, ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notification } from '@arco-design/web-vue'
 import { IconUser, IconLock, IconSafe } from '@arco-design/web-vue/es/icon'
@@ -124,6 +125,43 @@ const loading = ref(false)
 const formRef = ref()
 const captchaImage = ref('')
 const captchaId = ref('')
+
+const LOCKOUT_STORAGE_KEY = 'loginLockoutEnd';
+const lockoutEndTime = ref(0);
+const lockoutRemaining = ref(0);
+let lockoutTimer = null;
+
+const startLockoutCountdown = (seconds) => {
+  lockoutEndTime.value = Date.now() + seconds * 1000;
+  localStorage.setItem(LOCKOUT_STORAGE_KEY, lockoutEndTime.value.toString());
+  if (lockoutTimer) clearInterval(lockoutTimer);
+  lockoutTimer = setInterval(() => {
+    const remaining = Math.max(0, Math.round((lockoutEndTime.value - Date.now()) / 1000));
+    lockoutRemaining.value = remaining;
+    if (remaining <= 0) {
+      clearInterval(lockoutTimer);
+      lockoutTimer = null;
+      localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    }
+  }, 1000);
+};
+
+const checkExistingLockout = () => {
+  const saved = localStorage.getItem(LOCKOUT_STORAGE_KEY);
+  if (saved) {
+    const savedEnd = parseInt(saved, 10);
+    const remaining = Math.max(0, Math.round((savedEnd - Date.now()) / 1000));
+    if (remaining > 0) {
+      startLockoutCountdown(remaining);
+      return;
+    }
+  }
+  localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+};
+
+onUnmounted(() => {
+  if (lockoutTimer) clearInterval(lockoutTimer);
+});
 
 // 页面加载时获取通用设置并应用
 onMounted(async () => {
@@ -160,6 +198,7 @@ onMounted(async () => {
       document.body.setAttribute('arco-theme', 'dark');
     }
   } finally {
+    checkExistingLockout();
     // 无论如何都获取验证码
     refreshCaptcha();
   }
@@ -256,11 +295,16 @@ const handleLogin = async (data) => {
     router.push('/home?login_success=true')
   } catch (error) {
     console.error('登录失败:', error)
-    // 优先使用本地化的错误消息，如果后端返回了具体的错误信息则也显示出来
     const backendMessage = error.response?.data?.detail;
+    const httpStatus = error.response?.status;
     if (backendMessage) {
-      // 将后端错误信息映射到本地化文本
-      if (backendMessage.includes('Incorrect username or password')) {
+      if (httpStatus === 429) {
+        const match = backendMessage.match(/(\d+)/);
+        const seconds = match ? parseInt(match[1], 10) : 200;
+        lockoutRemaining.value = seconds;
+        startLockoutCountdown(seconds);
+        Notification.warning(t.value('loginLocked').replace('{seconds}', seconds.toString()));
+      } else if (backendMessage.includes('Incorrect username or password')) {
         Notification.error(t.value('loginFailed'))
       } else if (backendMessage.includes('Incorrect captcha')) {
         Notification.error(t.value('captchaIncorrect'))

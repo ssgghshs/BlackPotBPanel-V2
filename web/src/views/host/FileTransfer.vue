@@ -555,7 +555,7 @@ const handleSendToRemote = (record) => {
     Message.warning(t.value('pleaseSelectHost'));
     return;
   }
-  const path = record.path || `${currentPath.value}/${record.filename}`;
+  const path = currentPath.value === '/' ? `/${record.filename}` : `${currentPath.value}/${record.filename}`;
   scpDirection.value = 'upload';
   scpSendingFiles.value = [{ filename: record.filename, path }];
   showScpConfirm.value = true;
@@ -574,7 +574,7 @@ const handleBatchSendToRemote = () => {
   scpDirection.value = 'upload';
   scpSendingFiles.value = selected.map(r => ({
     filename: r.filename,
-    path: r.path || `${currentPath.value}/${r.filename}`,
+    path: currentPath.value === '/' ? `/${r.filename}` : `${currentPath.value}/${r.filename}`,
   }));
   showScpConfirm.value = true;
 };
@@ -907,9 +907,9 @@ const handleRemoteSendToLocal = (record) => {
     Message.warning(t.value('pleaseSelectHost'));
     return;
   }
-  const path = record.path || `${remotePath.value}/${record.filename}`;
+  const fullPath = remotePath.value === '/' ? `/${record.filename}` : `${remotePath.value}/${record.filename}`;
   scpDirection.value = 'download';
-  scpSendingFiles.value = [{ filename: record.filename, path }];
+  scpSendingFiles.value = [{ filename: record.filename, path: fullPath }];
   showScpConfirm.value = true;
 };
 
@@ -926,7 +926,7 @@ const handleRemoteBatchSendToLocal = () => {
   scpDirection.value = 'download';
   scpSendingFiles.value = selected.map(r => ({
     filename: r.filename,
-    path: r.path || `${remotePath.value}/${r.filename}`,
+    path: remotePath.value === '/' ? `/${r.filename}` : `${remotePath.value}/${r.filename}`,
   }));
   showScpConfirm.value = true;
 };

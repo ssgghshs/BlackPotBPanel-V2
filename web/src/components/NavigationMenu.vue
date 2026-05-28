@@ -82,6 +82,18 @@
 
     </a-menu>
     
+    <!-- 退出登录确认对话框 -->
+    <a-modal
+      v-model:visible="logoutModalVisible"
+      :title="t('confirmLogout')"
+      @ok="handleLogoutConfirm"
+      @cancel="logoutModalVisible = false"
+      :ok-text="t('confirm')"
+      :cancel-text="t('cancel')"
+    >
+      <p>{{ t('confirmLogoutContent') }}</p>
+    </a-modal>
+    
     <!-- 收起/展开按钮 -->
     <div class="collapse-button" @click="toggleMenu">
       <icon-left v-if="!isMenuCollapsed" />
@@ -203,19 +215,23 @@ export default {
       }
     };
 
+    // 退出登录确认对话框可见性
+    const logoutModalVisible = ref(false);
+
     // 处理退出登录逻辑
-    const handleLogout = async () => {
+    const handleLogout = () => {
+      logoutModalVisible.value = true;
+    };
+
+    const handleLogoutConfirm = async () => {
+      logoutModalVisible.value = false;
       try {
-        // 调用后端退出登录接口
         await logoutApi();
       } catch (error) {
         console.error('退出登录失败:', error);
       } finally {
-        // 无论API调用成功失败，都清除本地存储的token
         localStorage.removeItem('access_token');
-        // 清除用户信息
         clearUser();
-        // 跳转到登录页
         router.push('/login');
       }
     };
@@ -244,6 +260,8 @@ export default {
       selectedKeys,
       onMenuItemClick,
       handleLogout,
+      handleLogoutConfirm,
+      logoutModalVisible,
       t,
       isMenuCollapsed,
       toggleMenu,

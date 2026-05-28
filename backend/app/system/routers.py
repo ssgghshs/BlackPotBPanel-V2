@@ -92,7 +92,8 @@ async def update_env_config(
             ("ACCESS_TOKEN_EXPIRE_MINUTES" in config_dict) or
             ("HOST" in config_dict) or
             ("PORT" in config_dict) or
-            ("SSL_ENABLED" in config_dict)
+            ("SSL_ENABLED" in config_dict) or
+            ("LOGIN_LIMIT" in config_dict)
         ):
             # 异步执行服务重启
             asyncio.create_task(service.restart_service())
