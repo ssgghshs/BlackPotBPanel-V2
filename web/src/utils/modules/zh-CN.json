@@ -19,10 +19,13 @@
   "getCaptchaFailed": "获取验证码失败",
   "captchaIncorrect": "验证码错误",
   "captchaExpired": "验证码已过期",
+  "loginLocked": "登录失败次数过多，请等待 {seconds} 秒后重试",
 
 
   "__comment2": "// 导航菜单文本",
   "logout": "退出登录",
+  "confirmLogout": "确认退出登录",
+  "confirmLogoutContent": "确定要退出登录吗？",
   "dashboard": "仪表盘",
   "ansible": "Ansible",
   "container": "容器管理",
@@ -50,6 +53,9 @@
   "light": "浅色模式",
   "dark": "深色模式",
   "loginNotification": "登录提示",
+  "loginLimit": "登录限制",
+  "loginLimitEnabled": "登录限制已开启，连续登录失败5次将锁定IP 200秒",
+  "loginLimitDisabled": "登录限制已关闭",
   "appName": "应用名称",
   "enterAppName": "请输入应用名称",
   "version": "版本",

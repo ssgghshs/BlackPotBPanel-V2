@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # 服务器配置
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+
+    #登录限制开关
+    LOGIN_LIMIT: bool = True
     
     # 面板SSL配置
     SSL_ENABLED: bool = False

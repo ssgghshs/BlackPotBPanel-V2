@@ -16,12 +16,60 @@ import geoip2.database
 import os
 import ipaddress
 import logging
+import time
+from typing import Dict, List
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
 
 # 存储验证码的字典（在生产环境中应该使用Redis等）
 CAPTCHA_STORE = {}
+
+# IP 登录失败限制（当 LOGIN_LIMIT=True 时生效）
+MAX_LOGIN_FAILURES = 5           # 最大失败次数
+LOGIN_LOCKOUT_SECONDS = 200      # 锁定时间（秒）
+IP_FAILURE_MAP: Dict[str, List[float]] = {}  # IP -> [失败时间戳列表]
+
+
+def _cleanup_ip_failures():
+    """清理已过期的 IP 失败记录，防止内存泄漏"""
+    now = time.time()
+    cutoff = now - LOGIN_LOCKOUT_SECONDS
+    expired_ips = [ip for ip, times in IP_FAILURE_MAP.items()
+                   if all(t < cutoff for t in times)]
+    for ip in expired_ips:
+        del IP_FAILURE_MAP[ip]
+
+
+def _get_ip_block_remaining(ip_address: str) -> int:
+    """检查 IP 是否被锁定，返回剩余锁定秒数（0 表示未被锁定）"""
+    if not settings.LOGIN_LIMIT:
+        return 0
+    now = time.time()
+    cutoff = now - LOGIN_LOCKOUT_SECONDS
+    failures = [t for t in IP_FAILURE_MAP.get(ip_address, []) if t >= cutoff]
+    IP_FAILURE_MAP[ip_address] = failures
+    if len(failures) < MAX_LOGIN_FAILURES:
+        return 0
+    oldest = min(failures)
+    remaining = int(LOGIN_LOCKOUT_SECONDS - (now - oldest)) + 1
+    return max(1, remaining)
+
+
+def _record_ip_failure(ip_address: str):
+    """记录一次 IP 登录失败"""
+    if not settings.LOGIN_LIMIT:
+        return
+    now = time.time()
+    if ip_address not in IP_FAILURE_MAP:
+        IP_FAILURE_MAP[ip_address] = []
+    IP_FAILURE_MAP[ip_address].append(now)
+    _cleanup_ip_failures()
+
+
+def _clear_ip_failures(ip_address: str):
+    """登录成功后清除该 IP 的失败记录"""
+    IP_FAILURE_MAP.pop(ip_address, None)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -173,17 +221,33 @@ async def login(request: Request, form_data: schemas.UserLogin, db: AsyncSession
     
     # 验证成功后删除验证码
     del CAPTCHA_STORE[captcha_id]
-    
+
+    # 获取客户端IP
+    ip_address = request.client.host if request.client else None
+
+    # IP 登录频率限制检查
+    if ip_address:
+        block_remaining = _get_ip_block_remaining(ip_address)
+        if block_remaining > 0:
+            logger.warning(f"IP {ip_address} 因登录失败过多被限制，剩余 {block_remaining} 秒")
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"登录失败次数过多，请等待 {block_remaining} 秒后重试",
+            )
+
     user = await authenticate_user(db, form_data.username, form_data.password, models.User)
     
-    # 获取客户端IP和User-Agent
-    ip_address = request.client.host if request.client else None
+    # 获取User-Agent
     user_agent = request.headers.get("user-agent")
     
     # 获取地理位置信息
     location = get_location_from_ip(ip_address)
     
     if not user:
+        # 记录 IP 登录失败
+        if ip_address:
+            _record_ip_failure(ip_address)
+        
         # 记录失败的登录尝试
         try:
             login_log = log_schemas.LoginLogCreate(
@@ -203,6 +267,10 @@ async def login(request: Request, form_data: schemas.UserLogin, db: AsyncSession
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # 登录成功，清除该 IP 的失败记录
+    if ip_address:
+        _clear_ip_failures(ip_address)
     
     # 检查用户是否使用默认密码
     is_default_password = verify_password(DEFAULT_PASSWORD, user.hashed_password)
