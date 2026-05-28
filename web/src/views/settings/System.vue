@@ -34,6 +34,9 @@
         <a-form-item :label="t('loginNotification') + ':'" class="form-item">
           <a-switch v-model="formState.loginNotification" @change="handleLoginNotificationChange" />
         </a-form-item>
+        <a-form-item :label="t('loginLimit') + ':'" class="form-item">
+          <a-switch v-model="formState.loginLimit" @change="handleLoginLimitChange" />
+        </a-form-item>
       </a-form>
       <a-form :model="systemConfig" layout="horizontal">        
         <!-- 管理员专用配置 -->
@@ -197,7 +200,8 @@ const formState = reactive({
   theme: 'light', // 默认主题为亮色
   panelName: '',
   language: 'zh-CN', // 添加语言设置，默认为中文
-  loginNotification: true // 登录提示默认开启
+  loginNotification: true, // 登录提示默认开启
+  loginLimit: true,
 });
 
 const systemConfig = reactive({
@@ -286,6 +290,21 @@ const handleLoginNotificationChange = async (value) => {
     localStorage.setItem('loginNotification', value);
   } catch (error) {
     console.error('登录通知设置更新失败:', error);
+    Message.error(`${t.value('updateConfigFailed')}: ${error.message || t.value('unknownError')}`);
+  }
+};
+
+const handleLoginLimitChange = async (value) => {
+  try {
+    const response = await updateEnvConfig({ LOGIN_LIMIT: value });
+    console.log('登录限制设置更新成功:', response);
+    if (value) {
+      Message.info(t.value('loginLimitEnabled'));
+    } else {
+      Message.info(t.value('loginLimitDisabled'));
+    }
+  } catch (error) {
+    console.error('登录限制设置更新失败:', error);
     Message.error(`${t.value('updateConfigFailed')}: ${error.message || t.value('unknownError')}`);
   }
 };
@@ -403,6 +422,9 @@ const fetchSystemConfig = async () => {
       formState.loginNotification = configs.LOGIN_NOTIFY === 'True' || configs.LOGIN_NOTIFY === 'true' || configs.LOGIN_NOTIFY === true;
       // 保存到本地存储
       localStorage.setItem('loginNotification', formState.loginNotification);
+    }
+    if (configs.LOGIN_LIMIT !== undefined) {
+      formState.loginLimit = configs.LOGIN_LIMIT === 'True' || configs.LOGIN_LIMIT === 'true' || configs.LOGIN_LIMIT === true;
     }
   } catch (error) {
     console.error(t.value('getConfigFailed'), error);
