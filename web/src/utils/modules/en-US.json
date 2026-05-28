@@ -1643,5 +1643,6 @@
   "scpCancelled": "Transfer cancelled",
   "scpProgressConnectFailed": "Failed to connect to transfer progress service",
   "scpStartFailed": "Failed to start transfer task",
-  "pleaseSelectHost": "Please select remote host first"
+  "pleaseSelectHost": "Please select remote host first",
+  "commandDeletedSuccessfully": "Command deleted successfully"
 }

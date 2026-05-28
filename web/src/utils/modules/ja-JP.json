@@ -1663,5 +1663,6 @@
   "scpCancelled": "送�送キャンセル",
   "scpProgressConnectFailed": "送�送進捗サービスに接続失敗",
   "scpStartFailed": "送�送タスクを開始失敗",
-  "pleaseSelectHost": "リモートホストを選択してください。"
+  "pleaseSelectHost": "リモートホストを選択してください。",
+  "commandDeletedSuccessfully": "コマンドを削除成功"
 }

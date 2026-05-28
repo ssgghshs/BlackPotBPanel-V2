@@ -1678,5 +1678,6 @@
   "scpCancelled": "传输已取消",
   "scpProgressConnectFailed": "連接傳輸進度服務失敗",
   "scpStartFailed": "文件傳輸開始失敗",
-  "pleaseSelectHost": "請先選擇远程主機"
+  "pleaseSelectHost": "請先選擇远程主機",
+  "commandDeletedSuccessfully": "命令刪除成功"
 }  

@@ -1655,5 +1655,6 @@
   "scpCancelled": "传输已取消",
   "scpProgressConnectFailed": "连接传输进度服务失败",
   "scpStartFailed": "启动传输任务失败",
-  "pleaseSelectHost": "请先选择远程主机"
+  "pleaseSelectHost": "请先选择远程主机",
+  "commandDeletedSuccessfully": "命令删除成功"
 }
