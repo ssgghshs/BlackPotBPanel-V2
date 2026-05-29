@@ -9,16 +9,26 @@ BlackPotBPanel 是一款使用AI仿照BT面板基于vue+fastapi开发的linux管
 
 ## 环境要求
 - Python 3.10 及以上版本
-- 操作系统支持
+- 主流操作系统支持
 --------------
 | 操作系统 | 是否支持 | 
 |-----|-----|
-| Ubuntu 22.04 | ✅ |
-| RedHat 8 | ✅ |
-| Rocky Linux 9 | ✅ |
-| Debian 12.0 | ✅ |
-| CentOS 8 | 待测试 |
-| AlmaLinux 8+ | 待测试 |
+| Ubuntu 18.04+ | ✅ |
+| Ubuntu 20.04+ | ✅ |
+| Ubuntu 22.04+ | ✅ |
+| Ubuntu 24.04+ | ✅ |
+| RedHat 8+ | ✅ |
+| CentOS 8+ | ✅ |
+| CentOS Stream 9| 待测试 |
+| CentOS Stream 10| 待测试 |
+| Rocky Linux 9+ | ✅ |
+| Rocky Linux 10+ | 待测试 |
+| Debian 12.0+ | ✅ |
+| Debian 13.0+ | 待测试 |
+| AlmaLinux 8+ | ✅ |
+| AlmaLinux 9+ | 待测试 |
+| kylin-v10| ✅ |
+| openEuler-24.03 | ✅ |
 --------------
 其余操作系统可尝试手动安装
 
