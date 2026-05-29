@@ -36,12 +36,14 @@ service.interceptors.response.use(
   error => {
     console.log('响应错误:', error)
     // 如果是 401 错误，清除 token 并跳转到登录页
-    // 但要避免在登录页面本身造成无限重定向
+    // 但要避免在登录页面或入口页面本身造成无限重定向
     if (error.response && error.response.status === 401) {
-      // 检查当前是否已经在登录页面
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
+      const entrance = localStorage.getItem('security_entrance')
+      const entrancePath = entrance ? '/' + entrance : '/login'
+      // 如果已经在目标页面上，不要重复重定向
+      if (window.location.pathname !== entrancePath && window.location.pathname !== '/login') {
         localStorage.removeItem('access_token')
-        window.location.href = '/login'
+        window.location.href = entrancePath
       }
     }
     return Promise.reject(error)

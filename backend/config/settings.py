@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     #登录限制开关
     LOGIN_LIMIT: bool = True
     
+    # 安全入口（留空表示不启用）
+    SECURITY_ENTRANCE: str = ""
+    
     # 面板SSL配置
     SSL_ENABLED: bool = False
     SSL_CERT_PATH: str = "./data/ssl/ssl.crt"

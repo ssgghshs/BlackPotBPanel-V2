@@ -8,85 +8,105 @@
 
     <!--  内容区域  -->
     <div class="content-area">
-      <a-form :model="formState" layout="horizontal">
-        <a-form-item :label="t('appName') + ':'" class="form-item">
-          <a-input v-model="systemConfig.APP_NAME" :placeholder="t('enterAppName')" />
-          <a-button type="primary" size="small" style="margin-left: 10px;" @click="saveAppName">{{ t('save') }}</a-button>
-        </a-form-item>
-        <a-form-item :label="t('version') + ':'" class="form-item">
-          <a-input v-model="systemConfig.VERSION" :placeholder="t('enterVersion')" readonly />
-        </a-form-item>       
-        <a-form-item :label="t('language') + ':'" class="form-item">
-          <a-select v-model="formState.language" :placeholder="t('selectLanguage')" @change="handleLanguageChange">
-            <a-option value="zh-CN">中文</a-option>
-            <a-option value="en-US">English</a-option>
-            <a-option value="zh-TW">繁體中文</a-option>
-            <a-option value="ja-JP">日本語</a-option>
-            <a-option value="ko-KR">한국어</a-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item :label="t('theme') + ':'" class="form-item">
-          <a-select v-model="formState.theme" :placeholder="t('selectTheme')" @change="handleThemeChange">
-            <a-option value="light">{{ t('light') }}</a-option>
-            <a-option value="dark">{{ t('dark') }}</a-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item :label="t('loginNotification') + ':'" class="form-item">
-          <a-switch v-model="formState.loginNotification" @change="handleLoginNotificationChange" />
-        </a-form-item>
-        <a-form-item :label="t('loginLimit') + ':'" class="form-item">
-          <a-switch v-model="formState.loginLimit" @change="handleLoginLimitChange" />
-        </a-form-item>
-      </a-form>
-      <a-form :model="systemConfig" layout="horizontal">        
-        <!-- 管理员专用配置 -->
-        <template v-if="isAdminUser">
-          <a-form-item :label="t('timeZone') + ':'" class="form-item">
-            <a-select v-model="systemConfig.TIMEZONE" :placeholder="t('selectTimezone')">
-              <a-option value="UTC">{{ t('utc') }}</a-option>
-              <a-option value="Asia/Shanghai">{{ t('asiaShanghai') }}</a-option>
-              <a-option value="Asia/Tokyo">{{ t('asiaTokyo') }}</a-option>
-              <a-option value="Europe/London">{{ t('europeLondon') }}</a-option>
-              <a-option value="Europe/Paris">{{ t('europeParis') }}</a-option>
-              <a-option value="America/New_York">{{ t('americaNewYork') }}</a-option>
-              <a-option value="America/Los_Angeles">{{ t('americaLosAngeles') }}</a-option>
-            </a-select>
-            <a-button type="primary" size="small" style="margin-left: 10px;" @click="saveTimezone">{{ t('save') }}</a-button>
-          </a-form-item>
-          <a-form-item :label="t('Timeout') + ':'" class="form-item">
-            <a-input v-model="systemConfig.ACCESS_TOKEN_EXPIRE_MINUTES" :min="1" :max="1440" readonly />
-            <a-button type="primary" size="small" style="margin-left: 10px;" @click="showTimeoutDialog">{{ t('settings') }}</a-button>
-          </a-form-item>
-          <a-form-item :label="t('ipAddress') + ':'" class="form-item">
-            <a-input v-model="systemConfig.HOST" :placeholder="t('enterHost')" />
-            <a-button type="primary" size="small" style="margin-left: 10px;" @click="showHostDialog">{{ t('save') }}</a-button>
-          </a-form-item>
-          <div class="ip-hint">{{ t('ipHint') }}</div>
-          <a-form-item :label="t('port') + ':'" class="form-item">
-            <a-input-number v-model="systemConfig.PORT" :min="1" :max="65535" readonly style="width: 100%;" />
-            <a-button type="primary" size="small" style="margin-left: 10px;" @click="showPortDialog">{{ t('settings') }}</a-button>
-          </a-form-item>                  
-          <a-form-item :label="t('debug') + ':'" class="form-item">
-            <a-switch v-model="systemConfig.DEBUG" @change="handleDebugChange" />
-          </a-form-item>
-          <a-form-item :label="t('apiDoc') + ':'" class="form-item">
-            <a-switch v-model="systemConfig.ENABLE_DOCS" @change="handleApiDocChange" />
-            <a-link><icon-link /><a href="/api/v2/docs" target="_blank" class="api-doc-link">{{ t('apiDoc') }}</a></a-link>
-          </a-form-item>
-          <a-form-item :label="'SSL' + ':'" class="form-item">
-            <a-switch v-model="systemConfig.SSL_ENABLED" @change="handleSSLChange" />
-            <a-link v-if="isAdminUser" style="margin-left: 10px;" @click="showCertDialog">{{ t('viewCert') }}</a-link>
-          </a-form-item>
-        </template>
-        
-        <!-- 普通用户只读显示时区 -->
-        <template v-else>
-          <a-form-item :label="t('timeZone') + ':'" class="form-item">
-            <a-input v-model="systemConfig.TIMEZONE" :placeholder="t('selectTimezone')" readonly />
-          </a-form-item>
-        </template>
-        
-      </a-form>
+      <a-tabs :default-active-key="'panel'" :tab-position="'top'" type="card" >
+        <a-tab-pane key="panel" :title="t('panelSettings')">
+          <a-form :model="formState" layout="horizontal">
+            <a-form-item :label="t('appName') + ':'" class="form-item">
+              <a-input v-model="systemConfig.APP_NAME" :placeholder="t('enterAppName')" />
+              <a-button type="primary" size="small" style="margin-left: 10px;" @click="saveAppName">{{ t('save') }}</a-button>
+            </a-form-item>
+            <a-form-item :label="t('version') + ':'" class="form-item">
+              <a-input v-model="systemConfig.VERSION" :placeholder="t('enterVersion')" readonly />
+            </a-form-item>
+            <a-form-item :label="t('language') + ':'" class="form-item">
+              <a-select v-model="formState.language" :placeholder="t('selectLanguage')" @change="handleLanguageChange">
+                <a-option value="zh-CN">中文</a-option>
+                <a-option value="en-US">English</a-option>
+                <a-option value="zh-TW">繁體中文</a-option>
+                <a-option value="ja-JP">日本語</a-option>
+                <a-option value="ko-KR">한국어</a-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item :label="t('theme') + ':'" class="form-item">
+              <a-select v-model="formState.theme" :placeholder="t('selectTheme')" @change="handleThemeChange">
+                <a-option value="light">{{ t('light') }}</a-option>
+                <a-option value="dark">{{ t('dark') }}</a-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item :label="t('loginNotification') + ':'" class="form-item">
+              <a-switch v-model="formState.loginNotification" @change="handleLoginNotificationChange" />
+            </a-form-item>
+            <a-form-item :label="t('loginLimit') + ':'" class="form-item">
+              <a-switch v-model="formState.loginLimit" @change="handleLoginLimitChange" />
+            </a-form-item>
+          </a-form>
+          <a-form :model="systemConfig" layout="horizontal">
+            <template v-if="isAdminUser">
+              <a-form-item :label="t('timeZone') + ':'" class="form-item">
+                <a-select v-model="systemConfig.TIMEZONE" :placeholder="t('selectTimezone')">
+                  <a-option value="UTC">{{ t('utc') }}</a-option>
+                  <a-option value="Asia/Shanghai">{{ t('asiaShanghai') }}</a-option>
+                  <a-option value="Asia/Tokyo">{{ t('asiaTokyo') }}</a-option>
+                  <a-option value="Europe/London">{{ t('europeLondon') }}</a-option>
+                  <a-option value="Europe/Paris">{{ t('europeParis') }}</a-option>
+                  <a-option value="America/New_York">{{ t('americaNewYork') }}</a-option>
+                  <a-option value="America/Los_Angeles">{{ t('americaLosAngeles') }}</a-option>
+                </a-select>
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="saveTimezone">{{ t('save') }}</a-button>
+              </a-form-item>
+              <a-form-item :label="t('Timeout') + ':'" class="form-item">
+                <a-input v-model="systemConfig.ACCESS_TOKEN_EXPIRE_MINUTES" :min="1" :max="1440" readonly />
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="showTimeoutDialog">{{ t('settings') }}</a-button>
+              </a-form-item>
+              <a-form-item :label="t('debug') + ':'" class="form-item">
+                <a-switch v-model="systemConfig.DEBUG" @change="handleDebugChange" />
+              </a-form-item>
+              <a-form-item :label="t('apiDoc') + ':'" class="form-item">
+                <a-switch v-model="systemConfig.ENABLE_DOCS" @change="handleApiDocChange" />
+                <a-link><icon-link /><a href="/api/v2/docs" target="_blank" class="api-doc-link">{{ t('apiDoc') }}</a></a-link>
+              </a-form-item>
+            </template>
+            <template v-else>
+              <a-form-item :label="t('timeZone') + ':'" class="form-item">
+                <a-input v-model="systemConfig.TIMEZONE" :placeholder="t('selectTimezone')" readonly />
+              </a-form-item>
+            </template>
+          </a-form>
+        </a-tab-pane>
+        <a-tab-pane key="security" :title="t('securitySettings')">
+          <template v-if="isAdminUser">
+            <a-form :model="systemConfig" layout="horizontal">
+              <a-form-item :label="t('ipAddress') + ':'" class="form-item">
+                <a-input v-model="systemConfig.HOST" :placeholder="t('enterHost')" />
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="showHostDialog">{{ t('save') }}</a-button>
+              </a-form-item>
+              <div class="ip-hint">{{ t('ipHint') }}</div>
+              <a-form-item :label="t('port') + ':'" class="form-item">
+                <a-input-number v-model="systemConfig.PORT" :min="1" :max="65535" readonly style="width: 100%;" />
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="showPortDialog">{{ t('settings') }}</a-button>
+              </a-form-item>
+              <a-form-item :label="t('securityEntrance') + ':'" class="form-item">
+                <a-input v-model="systemConfig.SECURITY_ENTRANCE" readonly :placeholder="t('entranceNotSet')" />
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="showEntranceDialog">{{ t('settings') }}</a-button>
+              </a-form-item>
+              <a-form-item :label="'SSL' + ':'" class="form-item">
+                <a-switch v-model="systemConfig.SSL_ENABLED" @change="handleSSLChange" />
+                <a-link style="margin-left: 10px;" @click="showCertDialog">{{ t('viewCert') }}</a-link>
+              </a-form-item>
+            </a-form>
+          </template>
+          <template v-else>
+            <a-form :model="systemConfig" layout="horizontal">
+              <a-form-item :label="t('ipAddress') + ':'" class="form-item">
+                <a-input v-model="systemConfig.HOST" readonly />
+              </a-form-item>
+              <a-form-item :label="t('port') + ':'" class="form-item">
+                <a-input-number v-model="systemConfig.PORT" readonly style="width: 100%;" />
+              </a-form-item>
+            </a-form>
+          </template>
+        </a-tab-pane>
+      </a-tabs>
     </div>
 
     <!-- 重启服务确认对话框 -->
@@ -183,6 +203,19 @@
     >
       <p>{{ t('sslCloseConfirmMessage') }}</p>
     </a-modal>
+    
+    <!-- 安全入口设置对话框 -->
+    <a-modal 
+      v-model:visible="entranceModalVisible" 
+      :title="t('securityEntrance')" 
+      @ok="confirmEntranceChange" 
+      @cancel="cancelEntranceChange"
+    >
+      <a-form-item :label="t('securityEntrance') + ':'" class="form-item">
+        <a-input v-model="entranceValue" :placeholder="t('entranceInputHelper')" />
+      </a-form-item>
+      <p class="entrance-hint">{{ t('entranceHelper') }}</p>
+    </a-modal>
   </a-card>
 </template>
 
@@ -213,7 +246,8 @@ const systemConfig = reactive({
   ACCESS_TOKEN_EXPIRE_MINUTES: '30', // 改为字符串类型
   HOST: '0.0.0.0',
   PORT: 8000, // 确保默认值是数字类型
-  SSL_ENABLED: false
+  SSL_ENABLED: false,
+  SECURITY_ENTRANCE: ''
 });
 
 // 当前用户信息（保留用于兼容性，实际使用store中的currentUser）
@@ -396,6 +430,9 @@ const fetchSystemConfig = async () => {
     }
     if (configs.SSL_ENABLED !== undefined) {
       systemConfig.SSL_ENABLED = configs.SSL_ENABLED === 'True' || configs.SSL_ENABLED === 'true' || configs.SSL_ENABLED === true;
+    }
+    if (configs.SECURITY_ENTRANCE !== undefined) {
+      systemConfig.SECURITY_ENTRANCE = configs.SECURITY_ENTRANCE;
     }
     
     // 更新用户界面配置（从API获取）
@@ -769,6 +806,11 @@ const cancelPortChange = () => {
 
 // SSL关闭确认对话框
 const sslCloseModalVisible = ref(false);
+
+// 安全入口设置对话框
+const entranceModalVisible = ref(false);
+const entranceValue = ref('');
+
 const originalSSLValue = ref(false);
 
 // 处理SSL开关变化
@@ -827,6 +869,35 @@ const cancelSSLClose = () => {
   // 关闭对话框，恢复原始值
   sslCloseModalVisible.value = false;
   systemConfig.SSL_ENABLED = true;
+};
+
+// 安全入口设置
+const showEntranceDialog = () => {
+  entranceValue.value = systemConfig.SECURITY_ENTRANCE || '';
+  entranceModalVisible.value = true;
+};
+
+const confirmEntranceChange = async () => {
+  entranceModalVisible.value = false;
+  const newEntrance = entranceValue.value;
+  try {
+    await updateEnvConfig({ SECURITY_ENTRANCE: newEntrance });
+    systemConfig.SECURITY_ENTRANCE = newEntrance;
+    if (newEntrance) {
+      const currentUrl = window.location.href.split('?')[0].split('#')[0];
+      const baseUrl = currentUrl.replace(/\/+$/, '');
+      Message.success(`${t.value('updateSuccess')} ${t.value('entranceNewUrl')}`);
+    } else {
+      Message.success(t.value('entranceDisabled'));
+    }
+  } catch (error) {
+    console.error('安全入口设置更新失败:', error);
+    Message.error(`${t.value('updateFailed')}: ${error.message || t.value('unknownError')}`);
+  }
+};
+
+const cancelEntranceChange = () => {
+  entranceModalVisible.value = false;
 };
 
 // 自动跳转到HTTPS
@@ -1018,6 +1089,13 @@ const saveSettings = () => {
   margin-top: 4px;
   color: #8c8c8c;
   font-size: 12px;
+}
+
+.entrance-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 /* Monaco Editor 容器样式 */

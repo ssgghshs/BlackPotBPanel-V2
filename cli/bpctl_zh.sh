@@ -80,12 +80,15 @@ print_menu() {
     service_status=$(get_service_status)
     local ssl_status
     ssl_status=$(get_ssl_status)
+    local entrance_status
+    entrance_status=$(get_security_entrance)
 
     echo -e "${YELLOW}面板状态信息：${NC}"
     echo "----------------------------------------"
     echo -e "  服务状态：    $(get_service_status)"
     echo -e "  监听端口：    ${BLUE}$current_port${NC}"
     echo -e "  SSL状态：     $ssl_status"
+    echo -e "  安全入口：    $entrance_status"
     echo -e "  安装目录：    ${BLUE}$BASE_DIR${NC}"
     echo "----------------------------------------"
     echo ""
@@ -97,7 +100,8 @@ print_menu() {
     echo "  4) 修改面板端口"
     echo "  5) 开关面板 SSL"
     echo "  6) 修改 admin 密码"
-    echo "  7) 卸载面板"
+    echo "  7) 修改面板入口"
+    echo "  8) 卸载面板"
     echo "  0) 退出"
     echo ""
 }
@@ -212,6 +216,93 @@ toggle_ssl() {
     fi
 }
 
+get_security_entrance() {
+    local entrance
+    entrance=$(grep -E "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$entrance" ]; then
+        echo -e "${YELLOW}[未设置]${NC}"
+    else
+        echo -e "${BLUE}$entrance${NC}"
+    fi
+}
+
+change_security_entrance() {
+    local current_entrance
+    current_entrance=$(grep -E "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$current_entrance" ]; then
+        current_entrance="（未设置）"
+    fi
+    echo -e "${YELLOW}当前安全入口：${BLUE}$current_entrance${NC}"
+    echo ""
+    echo "请选择操作："
+    echo "  1) 输入自定义入口"
+    echo "  2) 自动生成随机入口"
+    echo "  3) 清除入口（禁用安全入口功能）"
+    echo "  0) 取消"
+    echo ""
+    read -p "请选择 [0-3]: " entrance_choice
+    case $entrance_choice in
+        1)
+            echo ""
+            read -p "请输入新的安全入口（5-16位字母数字，不含特殊字符）: " new_entrance
+            if [ -z "$new_entrance" ]; then
+                echo -e "${RED}[错误] 入口不能为空${NC}"
+                return
+            fi
+            if ! [[ "$new_entrance" =~ ^[a-zA-Z0-9]{5,16}$ ]]; then
+                echo -e "${RED}[错误] 入口必须是 5-16 位字母数字组合${NC}"
+                return
+            fi
+            if grep -q "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s/^SECURITY_ENTRANCE=.*/SECURITY_ENTRANCE=$new_entrance/" "$CONFIG_FILE"
+            else
+                echo "SECURITY_ENTRANCE=$new_entrance" >> "$CONFIG_FILE"
+            fi
+            echo -e "${GREEN}[成功] 安全入口已修改为 ${BLUE}$new_entrance${NC}"
+            ;;
+        2)
+            local random_entrance
+            random_entrance=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 12 | head -n 1)
+            if [ -z "$random_entrance" ]; then
+                random_entrance=$(date +%s | md5sum | head -c 12)
+            fi
+            if grep -q "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s/^SECURITY_ENTRANCE=.*/SECURITY_ENTRANCE=$random_entrance/" "$CONFIG_FILE"
+            else
+                echo "SECURITY_ENTRANCE=$random_entrance" >> "$CONFIG_FILE"
+            fi
+            echo -e "${GREEN}[成功] 已生成随机入口：${BLUE}$random_entrance${NC}"
+            ;;
+        3)
+            echo ""
+            read -p "确认清除安全入口？（面板将恢复直接访问）(y/n): " confirm
+            if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                if grep -q "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null; then
+                    sed -i "s/^SECURITY_ENTRANCE=.*/SECURITY_ENTRANCE=/" "$CONFIG_FILE"
+                fi
+                echo -e "${GREEN}[成功] 安全入口已清除${NC}"
+            else
+                echo -e "${YELLOW}[信息] 已取消${NC}"
+            fi
+            ;;
+        0)
+            echo -e "${YELLOW}[信息] 已取消${NC}"
+            ;;
+        *)
+            echo -e "${RED}[错误] 无效的选项${NC}"
+            ;;
+    esac
+
+    if [ "$entrance_choice" != "0" ]; then
+        read -p "是否立即重启服务生效？(y/n): " restart_confirm
+        if [ "$restart_confirm" = "y" ] || [ "$restart_confirm" = "Y" ]; then
+            restart_service
+        else
+            echo -e "${YELLOW}[提示] 请手动重启服务以生效新的入口配置${NC}"
+        fi
+    fi
+}
+
 change_admin_password() {
     SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
     if [ -f "$SCRIPT_DIR/password.sh" ]; then
@@ -271,7 +362,7 @@ main() {
     while true; do
         print_banner
         print_menu
-        read -p "请输入选项 [0-7]: " choice
+        read -p "请输入选项 [0-8]: " choice
         echo ""
         case $choice in
             1)
@@ -293,6 +384,9 @@ main() {
                 change_admin_password
                 ;;
             7)
+                change_security_entrance
+                ;;
+            8)
                 uninstall_panel
                 ;;
             0)

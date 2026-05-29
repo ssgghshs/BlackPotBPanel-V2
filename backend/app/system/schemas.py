@@ -19,6 +19,7 @@ class EnvConfigBase(BaseModel):
     PORT: Optional[int] = None
     SSL_ENABLED: Optional[bool] = None
     LOGIN_LIMIT: Optional[bool] = None
+    SECURITY_ENTRANCE: Optional[str] = None
 
 class EnvConfigCreate(EnvConfigBase):
     """创建环境配置模型"""

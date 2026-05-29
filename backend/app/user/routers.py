@@ -6,6 +6,7 @@ from app.user import schemas, models
 from app.user.schemas import RoleEnum
 from middleware import auth
 import uuid
+import base64
 from utils.captcha import generate_captcha, verify_captcha
 from middleware.auth import authenticate_user, create_access_token, get_current_active_user, verify_password
 from datetime import timedelta
@@ -21,6 +22,21 @@ from typing import Dict, List
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
+
+ENV_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "setting.conf")
+
+
+def _read_security_entrance() -> str:
+    """从 setting.conf 动态读取安全入口"""
+    if os.path.exists(ENV_FILE_PATH):
+        with open(ENV_FILE_PATH, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("SECURITY_ENTRANCE="):
+                    val = line.split("=", 1)[1].strip()
+                    return val
+    return ""
+
 
 # 存储验证码的字典（在生产环境中应该使用Redis等）
 CAPTCHA_STORE = {}
@@ -221,6 +237,20 @@ async def login(request: Request, form_data: schemas.UserLogin, db: AsyncSession
     
     # 验证成功后删除验证码
     del CAPTCHA_STORE[captcha_id]
+
+    # 安全入口校验
+    entrance = _read_security_entrance()
+    if entrance:
+        entrance_header = request.headers.get("EntranceCode", "")
+        try:
+            decoded_entrance = base64.b64decode(entrance_header).decode("utf-8")
+        except Exception:
+            decoded_entrance = ""
+        if decoded_entrance != entrance:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid security entrance",
+            )
 
     # 获取客户端IP
     ip_address = request.client.host if request.client else None

@@ -19,13 +19,18 @@ export function getCaptcha() {
 
 // 用户登录
 export function login(data, captchaId) {
+  const headers = {
+    'captcha-id': captchaId
+  }
+  const entrance = localStorage.getItem('security_entrance')
+  if (entrance) {
+    headers['EntranceCode'] = btoa(entrance)
+  }
   return request({
     url: '/users/login',
     method: 'post',
     data,
-    headers: {
-      'captcha-id': captchaId
-    }
+    headers
   })
 }
 

@@ -80,12 +80,15 @@ print_menu() {
     service_status=$(get_service_status)
     local ssl_status
     ssl_status=$(get_ssl_status)
+    local entrance_status
+    entrance_status=$(get_security_entrance)
 
     echo -e "${YELLOW}Panel Status:${NC}"
     echo "----------------------------------------"
     echo -e "  Service:      $(get_service_status)"
     echo -e "  Port:         ${BLUE}$current_port${NC}"
     echo -e "  SSL:          $ssl_status"
+    echo -e "  Entrance:     $entrance_status"
     echo -e "  Install Path: ${BLUE}$BASE_DIR${NC}"
     echo "----------------------------------------"
     echo ""
@@ -97,7 +100,8 @@ print_menu() {
     echo "  4) Change panel port"
     echo "  5) Toggle panel SSL"
     echo "  6) Change admin password"
-    echo "  7) Uninstall panel"
+    echo "  7) Change security entrance"
+    echo "  8) Uninstall panel"
     echo "  0) Exit"
     echo ""
 }
@@ -212,6 +216,93 @@ toggle_ssl() {
     fi
 }
 
+get_security_entrance() {
+    local entrance
+    entrance=$(grep -E "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$entrance" ]; then
+        echo -e "${YELLOW}[Not set]${NC}"
+    else
+        echo -e "${BLUE}$entrance${NC}"
+    fi
+}
+
+change_security_entrance() {
+    local current_entrance
+    current_entrance=$(grep -E "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$current_entrance" ]; then
+        current_entrance="(Not set)"
+    fi
+    echo -e "${YELLOW}Current security entrance: ${BLUE}$current_entrance${NC}"
+    echo ""
+    echo "Select an option:"
+    echo "  1) Enter custom entrance"
+    echo "  2) Generate random entrance"
+    echo "  3) Clear entrance (disable security entrance)"
+    echo "  0) Cancel"
+    echo ""
+    read -p "Choose [0-3]: " entrance_choice
+    case $entrance_choice in
+        1)
+            echo ""
+            read -p "Enter new security entrance (5-16 alphanumeric chars): " new_entrance
+            if [ -z "$new_entrance" ]; then
+                echo -e "${RED}[Error] Entrance cannot be empty${NC}"
+                return
+            fi
+            if ! [[ "$new_entrance" =~ ^[a-zA-Z0-9]{5,16}$ ]]; then
+                echo -e "${RED}[Error] Entrance must be 5-16 alphanumeric characters${NC}"
+                return
+            fi
+            if grep -q "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s/^SECURITY_ENTRANCE=.*/SECURITY_ENTRANCE=$new_entrance/" "$CONFIG_FILE"
+            else
+                echo "SECURITY_ENTRANCE=$new_entrance" >> "$CONFIG_FILE"
+            fi
+            echo -e "${GREEN}[OK] Security entrance changed to ${BLUE}$new_entrance${NC}"
+            ;;
+        2)
+            local random_entrance
+            random_entrance=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 12 | head -n 1)
+            if [ -z "$random_entrance" ]; then
+                random_entrance=$(date +%s | md5sum | head -c 12)
+            fi
+            if grep -q "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s/^SECURITY_ENTRANCE=.*/SECURITY_ENTRANCE=$random_entrance/" "$CONFIG_FILE"
+            else
+                echo "SECURITY_ENTRANCE=$random_entrance" >> "$CONFIG_FILE"
+            fi
+            echo -e "${GREEN}[OK] Random entrance generated: ${BLUE}$random_entrance${NC}"
+            ;;
+        3)
+            echo ""
+            read -p "Confirm clearing security entrance? (panel will be directly accessible) (y/n): " confirm
+            if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                if grep -q "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null; then
+                    sed -i "s/^SECURITY_ENTRANCE=.*/SECURITY_ENTRANCE=/" "$CONFIG_FILE"
+                fi
+                echo -e "${GREEN}[OK] Security entrance cleared${NC}"
+            else
+                echo -e "${YELLOW}[Info] Cancelled${NC}"
+            fi
+            ;;
+        0)
+            echo -e "${YELLOW}[Info] Cancelled${NC}"
+            ;;
+        *)
+            echo -e "${RED}[Error] Invalid option${NC}"
+            ;;
+    esac
+
+    if [ "$entrance_choice" != "0" ]; then
+        read -p "Restart service now to apply? (y/n): " restart_confirm
+        if [ "$restart_confirm" = "y" ] || [ "$restart_confirm" = "Y" ]; then
+            restart_service
+        else
+            echo -e "${YELLOW}[Hint] Please restart the service manually to apply the new entrance${NC}"
+        fi
+    fi
+}
+
 change_admin_password() {
     SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
     if [ -f "$SCRIPT_DIR/password.sh" ]; then
@@ -271,7 +362,7 @@ main() {
     while true; do
         print_banner
         print_menu
-        read -p "Please select an option [0-7]: " choice
+        read -p "Please select an option [0-8]: " choice
         echo ""
         case $choice in
             1)
@@ -293,6 +384,9 @@ main() {
                 change_admin_password
                 ;;
             7)
+                change_security_entrance
+                ;;
+            8)
                 uninstall_panel
                 ;;
             0)

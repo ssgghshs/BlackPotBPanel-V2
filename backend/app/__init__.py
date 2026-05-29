@@ -1,7 +1,13 @@
 # app/__init__.py
+import base64
+import os
+import logging
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse
+
 from app.user.routers import router as user_router
 from app.system.routers import router as system_router
 from app.log.routers import router as log_router
@@ -15,13 +21,68 @@ from app.waf.routers import router as waf_router
 from app.service.routers import router as service_router
 from app.crontab.routers import router as crontab_router
 from app.database.routers import router as database_router
-import os
 import config.settings
 
+logger = logging.getLogger(__name__)
+
+
+def _read_security_entrance() -> str:
+    """从 setting.conf 动态读取安全入口（不需重启即可感知配置变更）"""
+    env_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "setting.conf"
+    )
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("SECURITY_ENTRANCE="):
+                    val = line.split("=", 1)[1].strip()
+                    return val
+    return ""
+
+
+def _check_entrance_cookie(request: Request) -> bool:
+    """校验请求中是否携带了正确的安全入口 Cookie"""
+    entrance = _read_security_entrance()
+    if not entrance:
+        return True
+    cookie_value = request.cookies.get("SecurityEntrance")
+    if not cookie_value:
+        return False
+    try:
+        decoded = base64.b64decode(cookie_value).decode("utf-8")
+        return decoded == entrance
+    except Exception:
+        return False
+
+
+def _set_entrance_cookie(response: FileResponse, entrance: str) -> FileResponse:
+    """在响应中设置安全入口 Cookie（Base64 编码）"""
+    encoded = base64.b64encode(entrance.encode("utf-8")).decode("utf-8")
+    response.set_cookie(
+        key="SecurityEntrance",
+        value=encoded,
+        max_age=None,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+def _serve_index_html(web_dir: str) -> FileResponse:
+    """返回 index.html"""
+    index_path = os.path.join(web_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="index.html not found")
+
+
 def create_app():
-    # 从配置中获取文档设置
     enable_docs = config.settings.settings.ENABLE_DOCS
-    
+    entrance = _read_security_entrance()
+
     app = FastAPI(
         title=config.settings.settings.APP_NAME,
         description="BlackPotBPanel backend API",
@@ -29,7 +90,7 @@ def create_app():
         debug=config.settings.settings.DEBUG,
         docs_url="/api/v2/docs" if enable_docs else None,
         redoc_url="/api/v2/redoc" if enable_docs else None,
-        openapi_url="/api/v2/openapi.json" if enable_docs else None
+        openapi_url="/api/v2/openapi.json" if enable_docs else None,
     )
     
     # ===================== 新增：请求方法限制中间件 =====================
@@ -60,11 +121,58 @@ def create_app():
 
 
 
-
-    # API路由前缀
     api_prefix = "/api/v2"
-    
-    # 注册路由
+
+    # ─── 安全入口中间件───
+    # 在后端 API 层强制校验安全入口，所有请求必须经过入口验证
+    # 白名单路径：入口页面本身、静态资源、API 根路径
+    if entrance:
+
+        @app.middleware("http")
+        async def security_entrance_middleware(request: Request, call_next):
+            current_entrance = _read_security_entrance()
+            if not current_entrance:
+                return await call_next(request)
+
+            path = request.url.path
+
+            # 白名单：入口页面本身
+            if path == f"/{current_entrance}":
+                return await call_next(request)
+
+            # 白名单：静态资源和 OpenAPI
+            if path.startswith("/assets/") or path == "/login.png" or path == "/favicon.ico":
+                return await call_next(request)
+            if path == api_prefix or path.startswith(api_prefix + "/docs") or path.startswith(api_prefix + "/redoc") or path.startswith(api_prefix + "/openapi.json"):
+                return await call_next(request)
+
+            # Cookie 校验（SPA 页面导航时携带）
+            if _check_entrance_cookie(request):
+                return await call_next(request)
+
+            # Header 校验（API 调用时由前端 Login.vue 携带 EntranceCode）
+            entrance_header = request.headers.get("EntranceCode", "")
+            try:
+                decoded = base64.b64decode(entrance_header).decode("utf-8")
+                if decoded == current_entrance:
+                    return await call_next(request)
+            except Exception:
+                pass
+
+            # 所有校验均不通过 → 403 HTML 页面
+            forbidden_html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>403</title>
+</head>
+<body>
+    <center><h1>Forbidden - invalid security entrance</h1></center>
+    <hr><center>Blackpotbpanel/2.0</center>
+</body>
+</html>"""
+            return HTMLResponse(status_code=403, content=forbidden_html)
+
+    # 注册 API 路由
     app.include_router(user_router, prefix=api_prefix)
     app.include_router(system_router, prefix=api_prefix)
     app.include_router(log_router, prefix=api_prefix)
@@ -79,58 +187,83 @@ def create_app():
     app.include_router(crontab_router, prefix=api_prefix)
     app.include_router(database_router, prefix=api_prefix)
 
-    
-    # 配置静态文件服务，处理所有非API请求
-    from fastapi.responses import FileResponse
-    
-    # 计算前端静态文件目录路径
     web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dist")
-    
-    # 添加API根路由，避免404
+
     @app.get(api_prefix, tags=["api"])
     async def api_root():
         return {
             "message": "BlackPotBPanel API",
             "version": config.settings.settings.VERSION,
-            "docs": f"{api_prefix}/docs"
+            "docs": f"{api_prefix}/docs",
         }
-    
-    # 挂载静态文件目录
+
     app.mount("/assets", StaticFiles(directory=os.path.join(web_dir, "assets")), name="assets")
-    
-    # 单独挂载login.png文件
+
+    # 静态资源（验证码图片等）
     login_png_path = os.path.join(web_dir, "login.png")
     if os.path.exists(login_png_path):
         @app.get("/login.png", include_in_schema=False)
         async def serve_login_png():
             return FileResponse(login_png_path, media_type="image/png")
-    
-    # 单独挂载favicon.ico文件
+
     favicon_ico_path = os.path.join(web_dir, "favicon.ico")
     if os.path.exists(favicon_ico_path):
         @app.get("/favicon.ico", include_in_schema=False)
         async def serve_favicon_ico():
             return FileResponse(favicon_ico_path, media_type="image/x-icon")
-    
-    # 兜底路由：将所有非API请求重定向到index.html，支持前端路由
-    @app.get("{path:path}", include_in_schema=False)
-    async def catch_all(path: str):
-        # 排除API路径
-        if path.startswith(api_prefix.strip("/")):
-            raise HTTPException(status_code=404, detail="Not Found")
-        
-        # 检查请求的文件是否存在
-        file_path = os.path.join(web_dir, path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            # 为PNG文件设置正确的MIME类型
-            media_type = "image/png" if path.lower().endswith(".png") else None
-            return FileResponse(file_path, media_type=media_type)
-        
-        # 否则返回index.html，由前端路由处理
-        index_path = os.path.join(web_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        
-        raise HTTPException(status_code=404, detail="Not Found")
-        
+
+    # ─── 安全入口路由 ───────────────────────────────────────────
+    if entrance:
+        # 入口路由：GET /{entrance} → 返回 index.html + 设置 Cookie
+        @app.get(f"/{entrance}", include_in_schema=False)
+        async def security_entrance_page():
+            entrance_current = _read_security_entrance()
+            if entrance_current != entrance:
+                return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+            return _set_entrance_cookie(_serve_index_html(web_dir), entrance)
+
+        # 兜底路由：检查 Cookie 后返回前端 SPA
+        @app.get("{path:path}", include_in_schema=False)
+        async def catch_all(path: str):
+            if path.startswith(api_prefix.strip("/")):
+                _404 = """<!DOCTYPE html>
+<html>
+<head>
+    <title>404</title>
+</head>
+<body>
+    <center><h1>Not Found</h1></center>
+    <hr><center>Blackpotbpanel/2.0</center>
+</body>
+</html>"""
+                return HTMLResponse(status_code=404, content=_404)
+
+            file_path = os.path.join(web_dir, path)
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                return FileResponse(file_path)
+
+            return _serve_index_html(web_dir)
+    else:
+        # 未设置入口，保持原有行为
+        @app.get("{path:path}", include_in_schema=False)
+        async def catch_all(path: str):
+            if path.startswith(api_prefix.strip("/")):
+                _404 = """<!DOCTYPE html>
+<html>
+<head>
+    <title>404</title>
+</head>
+<body>
+    <center><h1>Not Found</h1></center>
+    <hr><center>Blackpotbpanel/2.0</center>
+</body>
+</html>"""
+                return HTMLResponse(status_code=404, content=_404)
+
+            file_path = os.path.join(web_dir, path)
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                return FileResponse(file_path)
+
+            return _serve_index_html(web_dir)
+
     return app
