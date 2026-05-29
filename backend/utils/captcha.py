@@ -3,6 +3,7 @@ import string
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import base64
+from config.settings import settings
 
 def generate_captcha(length=4):
     """
@@ -22,17 +23,11 @@ def generate_captcha(length=4):
     image = Image.new('RGB', (width, height), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
     
-    # 尝试使用系统字体，如果失败则使用默认字体
+    # 使用配置中的TTF字体文件
     try:
-        # 在Windows系统上尝试使用arial字体
-        font = ImageFont.truetype("arial.ttf", 24)
+        font = ImageFont.truetype(settings.TTF_FONT_PATH, 24)
     except:
-        try:
-            # 在Linux/Mac系统上尝试使用DejaVuSans字体
-            font = ImageFont.truetype("/opt/blackpotbpanel-v2/app/backend/data/ttf/DejaVuSans.ttf", 24)
-        except:
-            # 使用默认字体
-            font = ImageFont.load_default()
+        font = ImageFont.load_default()
     
     # 绘制验证码文本
     text_width = draw.textlength(captcha_text, font=font)

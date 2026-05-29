@@ -73,10 +73,13 @@ class Settings(BaseSettings):
     GEOIP_COUNTRY_DB_PATH: str = "./data/GeoLite2-Country.json"
     COUNTRY_CODE_MAP_PATH: str = "./data/country.txt"
     GEOIP_CITY_DB_PATH: str = "./data/GeoLite2-City.mmdb"
+    #TTF字体路径
+    TTF_FONT_PATH: str = "./data/ttf/DejaVuSans.ttf"
+
     
     # 基础路径
     BASE_PANEL_PATH: str = _BASE_PANEL
-    
+
     # 回收站路径
     RECYCLE_PATH: str = f"{_BASE_PANEL}/.recycle_bp"
     # 网站ssl证书
