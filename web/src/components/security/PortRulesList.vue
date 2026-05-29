@@ -82,7 +82,6 @@
           <a-select v-model="addForm.protocol">
             <a-option value="tcp">TCP</a-option>
             <a-option value="udp">UDP</a-option>
-            <a-option value="tcp/udp">TCP/UDP</a-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('strategy')" required>

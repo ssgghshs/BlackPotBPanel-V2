@@ -231,3 +231,14 @@ class ScpTransferTask(BaseModel):
     total_bytes: int = Field(0, description="总字节数")
     transferred_bytes: int = Field(0, description="已传输字节数")
     message: str = Field("", description="状态消息")
+
+
+class HostResource(BaseModel):
+    """主机资源占用信息"""
+    id: int = Field(..., description="主机ID")
+    cpu: float = Field(0, description="CPU使用率 (%)")
+    cpu_usage: int = Field(0, description="CPU使用量 (核数)")
+    memory: float = Field(0, description="内存使用率 (%)")
+    mem_usage: int = Field(0, description="内存使用量 (MB)")
+    disk: float = Field(0, description="磁盘使用率 (%)")
+    disk_usage: int = Field(0, description="磁盘使用量 (GB)")

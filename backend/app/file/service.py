@@ -877,7 +877,7 @@ async def delete_files_batch(path: str, filenames: List[str]) -> Dict[str, Any]:
     }
 
 
-async def move_file_or_directory(source_path: str, source_name: str, destination_path: str, destination_name: str = "") -> bool:
+async def move_file_or_directory(source_path: str, source_name: str, destination_path: str, destination_name: str = "", overwrite: bool = False) -> bool:
     """移动文件或目录到指定路径"""
     try:
         # 如果文件名是格式化后的符号链接格式 "filename -> target_path"，提取原始文件名
@@ -903,7 +903,11 @@ async def move_file_or_directory(source_path: str, source_name: str, destination
         
         # 检查目标路径是否存在同名文件或目录
         if os.path.exists(full_destination_path):
-            raise FileExistsError(f"目标路径已存在同名文件或目录 {destination_name}")
+            if not overwrite:
+                raise FileExistsError(f"目标路径已存在同名文件或目录 {destination_name}")
+            if os.path.isdir(full_destination_path):
+                raise ValueError(f"目标路径已存在同名目录 {destination_name}，不支持覆盖目录")
+            os.remove(full_destination_path)
         
         # 创建目标目录（如果不存在）
         os.makedirs(destination_path, exist_ok=True)
@@ -1266,7 +1270,7 @@ async def get_image_content(path: str, filename: str) -> bytes:
         raise e
 
 
-async def copy_file_or_directory(source_path: str, source_name: str, destination_path: str, destination_name: str = "") -> bool:
+async def copy_file_or_directory(source_path: str, source_name: str, destination_path: str, destination_name: str = "", overwrite: bool = False) -> bool:
     """复制文件或目录到指定路径"""
     try:
         # 如果文件名是格式化后的符号链接格式 "filename -> target_path"，提取原始文件名
@@ -1292,7 +1296,11 @@ async def copy_file_or_directory(source_path: str, source_name: str, destination
         
         # 检查目标路径是否存在同名文件或目录
         if os.path.exists(full_destination_path):
-            raise FileExistsError(f"目标路径已存在同名文件或目录 {destination_name}")
+            if not overwrite:
+                raise FileExistsError(f"目标路径已存在同名文件或目录 {destination_name}")
+            if os.path.isdir(full_destination_path):
+                raise ValueError(f"目标路径已存在同名目录 {destination_name}，不支持覆盖目录")
+            os.remove(full_destination_path)
         
         # 创建目标目录（如果不存在）
         os.makedirs(destination_path, exist_ok=True)

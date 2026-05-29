@@ -404,6 +404,31 @@
     />
   </a-modal>
 
+  <!-- 文件冲突弹窗 -->
+  <a-modal
+    v-model:visible="fileConflict.visible"
+    :title="t('fileConflictTitle')"
+    @cancel="fileConflict.visible = false"
+    :footer="false"
+    :mask-closable="false"
+    width="500px"
+  >
+    <div class="conflict-content">
+      <div class="conflict-icon">
+        <icon-exclamation-circle-fill style="color: rgb(var(--warning-6)); font-size: 48px;" />
+      </div>
+      <div class="conflict-info">
+        <p class="conflict-message">{{ t('fileConflictDesc') }}</p>
+        <p class="conflict-file">{{ fileConflict.destinationPath }}/{{ fileConflict.destinationName }}</p>
+      </div>
+    </div>
+    <div class="conflict-actions">
+      <a-button @click="handleFileConflictRename">{{ t('fileConflictRename') }}</a-button>
+      <a-button type="primary" status="warning" @click="handleFileConflictOverwrite">{{ t('fileConflictOverwrite') }}</a-button>
+      <a-button @click="fileConflict.visible = false">{{ t('cancel') }}</a-button>
+    </div>
+  </a-modal>
+
   <!-- 移动文件/目录对话框 -->
   <FileMove
     :visible="moveDrawer.visible"
@@ -589,6 +614,7 @@ import OperatorMenu from '../../components/file/OperatorMenu.vue';
 import RecycleDrawer from '../../components/file/RecycleDrawer.vue';
 // 引入文件图标映射工具函数
 import { getFileIcon, getFileIconColor, isImageFile, isCompressedFile, canOpenFile } from '../../utils/file/fileIconMapper';
+import { IconExclamationCircleFill } from '@arco-design/web-vue/es/icon';
 
 // 注册组件
 const AInputSearch = InputSearch;
@@ -2166,6 +2192,16 @@ const moveDrawer = reactive({
   destinationName: ''
 });
 
+// 文件冲突弹窗数据
+const fileConflict = reactive({
+  visible: false,
+  operation: '', // 'move' 或 'copy'
+  sourcePath: '',
+  sourceName: '',
+  destinationPath: '',
+  destinationName: ''
+});
+
 // 复制抽屉数据
 const copyDrawer = reactive({
   visible: false,
@@ -2398,95 +2434,110 @@ const handleMove = (key, record) => {
   Message.success(`${t.value('fileReadyToMove')}: ${actualFilename}`);
 };
 
+// 为文件名添加 -backup 后缀
+const addBackupSuffix = (filename) => {
+  const fileNameParts = filename.split('.');
+  if (fileNameParts.length > 1) {
+    const extension = fileNameParts.pop();
+    const fileNameWithoutExtension = fileNameParts.join('.');
+    return `${fileNameWithoutExtension}-backup.${extension}`;
+  }
+  return `${filename}-backup`;
+};
+
+// 检查目标路径是否存在文件冲突
+const checkFileConflict = async (destinationPath, destinationName) => {
+  try {
+    const res = await getFileList({ path: destinationPath, skip: 0, limit: 10000 });
+    const existingFiles = res?.data || [];
+    return existingFiles.some(f => f.filename === destinationName);
+  } catch (error) {
+    return false;
+  }
+};
+
+// 执行移动操作（内部使用）
+const _executeMove = async (sourcePath, sourceName, destinationPath, destinationName, overwrite = false) => {
+  await moveFileOrDirectory({
+    source_path: sourcePath,
+    source_name: sourceName,
+    destination_path: destinationPath,
+    destination_name: destinationName,
+    overwrite
+  });
+  Message.success(`${t.value('fileMoved')}: ${sourceName} -> ${destinationPath}/${destinationName}`);
+  refresh(activeKey.value);
+  clipboard.hasContent = false;
+  clipboard.operation = null;
+};
+
+// 执行复制操作（内部使用）
+const _executeCopy = async (sourcePath, sourceName, destinationPath, destinationName, overwrite = false) => {
+  await copyFileOrDirectory({
+    source_path: sourcePath,
+    source_name: sourceName,
+    destination_path: destinationPath,
+    destination_name: destinationName,
+    overwrite
+  });
+  Message.success(`${t.value('fileCopied')}: ${sourceName} -> ${destinationPath}/${destinationName}`);
+  refresh(activeKey.value);
+  clipboard.hasContent = false;
+  clipboard.operation = null;
+  clipboard.sourceKey = null;
+};
+
 // 处理粘贴操作
 const handlePaste = async () => {
   if (!clipboard.hasContent) return;
   
-  // 设置目标路径为当前路径
   const currentPath = getCurrentPath(activeKey.value);
-  const sourcePath = clipboard.sourcePath || copyDrawer.sourcePath || moveDrawer.sourcePath; // 优先使用剪贴板中的源路径
+  const sourcePath = clipboard.sourcePath || copyDrawer.sourcePath || moveDrawer.sourcePath;
   
   if (clipboard.operation === 'move') {
-    // 判断是否在同一目录下
     if (currentPath === sourcePath) {
-      // 在同一目录下，显示移动对话框，并添加-backup后缀
       moveDrawer.destinationPath = currentPath;
-      
-      // 为同一目录下的移动添加-backup后缀
-      let targetFileName = moveDrawer.destinationName;
-      const fileNameParts = targetFileName.split('.');
-      if (fileNameParts.length > 1) {
-        // 如果文件有扩展名，将-backup插入到文件名和扩展名之间
-        const extension = fileNameParts.pop();
-        const fileNameWithoutExtension = fileNameParts.join('.');
-        moveDrawer.destinationName = `${fileNameWithoutExtension}-backup.${extension}`;
-      } else {
-        // 如果文件没有扩展名，直接加上-backup后缀
-        moveDrawer.destinationName = `${targetFileName}-backup`;
-      }
-      
+      moveDrawer.destinationName = addBackupSuffix(moveDrawer.destinationName);
       moveDrawer.visible = true;
     } else {
-      // 不在同一目录下，直接移动文件，保持原文件名
-      try {
-        await moveFileOrDirectory({
-          source_path: moveDrawer.sourcePath,
-          source_name: moveDrawer.sourceName,
-          destination_path: currentPath,
-          destination_name: moveDrawer.destinationName
-        });
-        
-        Message.success(`${t.value('fileMoved')}: ${moveDrawer.sourceName} -> ${currentPath}/${moveDrawer.destinationName}`);
-        refresh(activeKey.value);
-        
-        // 清空剪贴板状态
-        clipboard.hasContent = false;
-        clipboard.operation = null;
-      } catch (error) {
-        console.error('移动失败:', error);
-        Message.error(t.value('moveFailed'));
+      const hasConflict = await checkFileConflict(currentPath, moveDrawer.destinationName);
+      if (hasConflict) {
+        fileConflict.operation = 'move';
+        fileConflict.sourcePath = moveDrawer.sourcePath;
+        fileConflict.sourceName = moveDrawer.sourceName;
+        fileConflict.destinationPath = currentPath;
+        fileConflict.destinationName = moveDrawer.destinationName;
+        fileConflict.visible = true;
+      } else {
+        try {
+          await _executeMove(moveDrawer.sourcePath, moveDrawer.sourceName, currentPath, moveDrawer.destinationName);
+        } catch (error) {
+          console.error('移动失败:', error);
+          Message.error(t.value('moveFailed'));
+        }
       }
     }
   } else if (clipboard.operation === 'copy') {
-    // 判断是否在同一目录下
     if (currentPath === sourcePath) {
-      // 在同一目录下，显示复制对话框，并添加-backup后缀
       copyDrawer.destinationPath = currentPath;
-      
-      // 为同一目录下的复制添加-backup后缀
-      let targetFileName = copyDrawer.destinationName;
-      const fileNameParts = targetFileName.split('.');
-      if (fileNameParts.length > 1) {
-        // 如果文件有扩展名，将-backup插入到文件名和扩展名之间
-        const extension = fileNameParts.pop();
-        const fileNameWithoutExtension = fileNameParts.join('.');
-        copyDrawer.destinationName = `${fileNameWithoutExtension}-backup.${extension}`;
-      } else {
-        // 如果文件没有扩展名，直接加上-backup后缀
-        copyDrawer.destinationName = `${targetFileName}-backup`;
-      }
-      
+      copyDrawer.destinationName = addBackupSuffix(copyDrawer.destinationName);
       copyDrawer.visible = true;
     } else {
-      // 不在同一目录下，直接复制文件，保持原文件名
-      try {
-        await copyFileOrDirectory({
-          source_path: copyDrawer.sourcePath,
-          source_name: copyDrawer.sourceName,
-          destination_path: currentPath,
-          destination_name: copyDrawer.destinationName // 保持原文件名
-        });
-        
-        Message.success(`${t.value('fileCopied')}: ${copyDrawer.sourceName} -> ${currentPath}/${copyDrawer.destinationName}`);
-        refresh(activeKey.value);
-        
-        // 清空剪贴板状态
-        clipboard.hasContent = false;
-        clipboard.operation = null;
-        clipboard.sourceKey = null;
-      } catch (error) {
-        console.error('复制失败:', error);
-        Message.error(t.value('copyFailed'));
+      const hasConflict = await checkFileConflict(currentPath, copyDrawer.destinationName);
+      if (hasConflict) {
+        fileConflict.operation = 'copy';
+        fileConflict.sourcePath = copyDrawer.sourcePath;
+        fileConflict.sourceName = copyDrawer.sourceName;
+        fileConflict.destinationPath = currentPath;
+        fileConflict.destinationName = copyDrawer.destinationName;
+        fileConflict.visible = true;
+      } else {
+        try {
+          await _executeCopy(copyDrawer.sourcePath, copyDrawer.sourceName, currentPath, copyDrawer.destinationName);
+        } catch (error) {
+          console.error('复制失败:', error);
+          Message.error(t.value('copyFailed'));
+        }
       }
     }
   }
@@ -2499,31 +2550,59 @@ const handleMoveSubmit = async (data) => {
     return false;
   }
   
+  const hasConflict = await checkFileConflict(data.destinationPath, data.destinationName);
+  if (hasConflict) {
+    fileConflict.operation = 'move';
+    fileConflict.sourcePath = data.sourcePath;
+    fileConflict.sourceName = data.sourceName;
+    fileConflict.destinationPath = data.destinationPath;
+    fileConflict.destinationName = data.destinationName;
+    fileConflict.visible = true;
+    return false;
+  }
+  
   try {
-    await moveFileOrDirectory({
-      source_path: data.sourcePath,
-      source_name: data.sourceName,
-      destination_path: data.destinationPath,
-      destination_name: data.destinationName
-    });
-    
-    Message.success(`${t.value('fileMoved')}: ${data.sourceName} -> ${data.destinationPath}/${data.destinationName}`);
+    await _executeMove(data.sourcePath, data.sourceName, data.destinationPath, data.destinationName);
     moveDrawer.visible = false;
-    
-    // 更新 moveDrawer 的值以便下次使用
     moveDrawer.destinationPath = data.destinationPath;
     moveDrawer.destinationName = data.destinationName;
-    
-    refresh(activeKey.value);
-    
-    // 清空剪贴板状态
-    clipboard.hasContent = false;
-    clipboard.operation = null;
   } catch (error) {
     console.error('移动失败:', error);
     Message.error(t.value('moveFailed'));
     return false;
   }
+  return true;
+};
+
+// 处理复制提交
+const handleCopySubmit = async (data) => {
+  if (!data.destinationPath.trim()) {
+    Message.error(t.value('destinationPathCannotBeEmpty'));
+    return false;
+  }
+  
+  const hasConflict = await checkFileConflict(data.destinationPath, data.destinationName);
+  if (hasConflict) {
+    fileConflict.operation = 'copy';
+    fileConflict.sourcePath = data.sourcePath;
+    fileConflict.sourceName = data.sourceName;
+    fileConflict.destinationPath = data.destinationPath;
+    fileConflict.destinationName = data.destinationName;
+    fileConflict.visible = true;
+    return false;
+  }
+  
+  try {
+    await _executeCopy(data.sourcePath, data.sourceName, data.destinationPath, data.destinationName);
+    copyDrawer.visible = false;
+    copyDrawer.destinationPath = data.destinationPath;
+    copyDrawer.destinationName = data.destinationName;
+  } catch (error) {
+    console.error('复制失败:', error);
+    Message.error(t.value('copyFailed'));
+    return false;
+  }
+  return true;
 };
 
 // 处理移动对话框中的 Mini 文件管理器显示
@@ -2541,78 +2620,71 @@ const handleContextMove = () => {
 
 // 处理复制文件/文件夹
 const handleCopy = (key, record) => {
-  // 禁止操作回收站目录
   if (isRecycleDirectory(record.filename)) {
     Message.warning(t.value('cannotOperateRecycleDirectory'));
     return;
   }
   
-  // 处理符号链接：提取实际文件名（忽略 " -> 目标路径" 部分）
   let actualFilename = record.filename;
   if (actualFilename.includes(' -> ')) {
     actualFilename = actualFilename.split(' -> ')[0].trim();
   }
   
-  // 设置抽屉数据，但不显示对话框
   copyDrawer.sourcePath = getCurrentPath(key);
   copyDrawer.sourceName = actualFilename;
   copyDrawer.destinationPath = getCurrentPath(key);
   
-  // 处理文件名中包含子目录路径的情况，提取实际文件名
   let targetFileName = actualFilename;
   if (actualFilename.includes('/')) {
     const lastSlashIndex = actualFilename.lastIndexOf('/');
     targetFileName = actualFilename.substring(lastSlashIndex + 1);
   }
   
-  // 注意：这里不再默认添加-backup后缀，而是保持原始文件名
-  // 后缀只在粘贴时判断是否需要添加
   copyDrawer.destinationName = targetFileName;
   
-  // 更新剪贴板状态，标记为复制操作
   clipboard.hasContent = true;
   clipboard.operation = 'copy';
-  clipboard.sourceKey = key; // 保存源标签页key，用于判断是否在同一目录
-  clipboard.sourcePath = getCurrentPath(key); // 保存源路径，用于判断是否在同一目录
+  clipboard.sourceKey = key;
+  clipboard.sourcePath = getCurrentPath(key);
 
-  // 显示复制成功的提示
   Message.success(`${t.value('fileCopiedToClipboard')}: ${actualFilename}`);
 };
 
-// 处理复制提交
-const handleCopySubmit = async (data) => {
-  if (!data.destinationPath.trim()) {
-    Message.error(t.value('destinationPathCannotBeEmpty'));
-    return false;
-  }
-  
+// 处理文件冲突 - 覆盖
+const handleFileConflictOverwrite = async () => {
+  fileConflict.visible = false;
   try {
-    await copyFileOrDirectory({
-      source_path: data.sourcePath,
-      source_name: data.sourceName,
-      destination_path: data.destinationPath,
-      destination_name: data.destinationName
-    });
-    
-    Message.success(`${t.value('fileCopied')}: ${data.sourceName} -> ${data.destinationPath}/${data.destinationName}`);
+    if (fileConflict.operation === 'move') {
+      await _executeMove(fileConflict.sourcePath, fileConflict.sourceName, fileConflict.destinationPath, fileConflict.destinationName, true);
+    } else {
+      await _executeCopy(fileConflict.sourcePath, fileConflict.sourceName, fileConflict.destinationPath, fileConflict.destinationName, true);
+    }
+    moveDrawer.visible = false;
     copyDrawer.visible = false;
-    
-    // 更新 copyDrawer 的值以便下次使用
-    copyDrawer.destinationPath = data.destinationPath;
-    copyDrawer.destinationName = data.destinationName;
-    
-    // 刷新文件列表
-    refresh(activeKey.value);
-    
-    // 清空剪贴板状态
-    clipboard.hasContent = false;
-    clipboard.operation = null;
-    clipboard.sourceKey = null;
   } catch (error) {
-    console.error('复制失败:', error);
-    Message.error(t.value('copyFailed'));
-    return false;
+    console.error('操作失败:', error);
+    Message.error(t.value(fileConflict.operation === 'move' ? 'moveFailed' : 'copyFailed'));
   }
+  fileConflict.operation = '';
+};
+
+// 处理文件冲突 - 重命名
+const handleFileConflictRename = async () => {
+  fileConflict.visible = false;
+  const newName = addBackupSuffix(fileConflict.destinationName);
+  try {
+    if (fileConflict.operation === 'move') {
+      await _executeMove(fileConflict.sourcePath, fileConflict.sourceName, fileConflict.destinationPath, newName, false);
+    } else {
+      await _executeCopy(fileConflict.sourcePath, fileConflict.sourceName, fileConflict.destinationPath, newName, false);
+    }
+    moveDrawer.visible = false;
+    copyDrawer.visible = false;
+  } catch (error) {
+    console.error('操作失败:', error);
+    Message.error(t.value(fileConflict.operation === 'move' ? 'moveFailed' : 'copyFailed'));
+  }
+  fileConflict.operation = '';
 };
 
 // 处理复制对话框中的 Mini 文件管理器显示
@@ -3485,6 +3557,46 @@ watch(() => window.innerWidth, () => {
 
 :deep(.arco-table-tr:hover) {
   background-color: var(--color-fill-1) !important;
+}
+
+/* 文件冲突弹窗 */
+.conflict-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.conflict-icon {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.conflict-info {
+  flex: 1;
+}
+
+.conflict-message {
+  font-size: 14px;
+  margin: 0 0 8px 0;
+  color: var(--color-text-1);
+}
+
+.conflict-file {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--color-text-2);
+  word-break: break-all;
+  background: var(--color-fill-2);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.conflict-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* 响应式优化 */

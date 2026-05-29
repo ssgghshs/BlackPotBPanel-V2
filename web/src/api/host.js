@@ -277,6 +277,13 @@ export function connectSCPProgress(task_id) {
 }
 
 
+// 获取远程主机资源信息
+export function getAllHostResource() {
+  return request(`/host/resource/all`, {
+    method: 'GET',
+  })
+}
+
 
 
 

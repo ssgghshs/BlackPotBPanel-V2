@@ -681,6 +681,8 @@
   "uploadFileFailed": "Failed to upload file",
   "fileConflictTitle": "File Conflict",
   "fileConflictDesc": "The following files already exist in the target directory. Overwrite?",
+  "fileConflictOverwrite": "Overwrite",
+  "fileConflictRename": "Rename (add -backup)",
   "overwrite": "Overwrite",
   "readyToUpload": "Ready to Upload",
   "files": "files",

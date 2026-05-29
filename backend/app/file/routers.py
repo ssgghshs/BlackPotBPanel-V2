@@ -83,8 +83,8 @@ async def search_files(
 @router.get("/dirsize")
 async def get_directory_size(
     path: str, 
-    current_user = Depends(get_current_active_user)
-    ):
+    current_user = Depends(get_current_active_user)):
+    """获取指定目录的大小"""
     try:
         size_bytes = await service.get_directory_size(path)
         return {
@@ -520,12 +520,13 @@ async def move_file_or_directory(
     source_path: str = Body(...), 
     source_name: str = Body(...), 
     destination_path: str = Body(...), 
-    destination_name: str = Body(""), 
+    destination_name: str = Body(""),
+    overwrite: bool = Body(False, description="是否覆盖目标路径已存在的文件"),
     current_user = Depends(get_current_active_user)
 ):
     """移动文件或目录到指定路径"""
     try:
-        result = await service.move_file_or_directory(source_path, source_name, destination_path, destination_name)
+        result = await service.move_file_or_directory(source_path, source_name, destination_path, destination_name, overwrite)
         if result:
             # 处理中文文件名的编码问题
             from urllib.parse import quote
@@ -593,12 +594,13 @@ async def copy_file_or_directory(
     source_path: str = Body(...), 
     source_name: str = Body(...), 
     destination_path: str = Body(...), 
-    destination_name: str = Body(""), 
+    destination_name: str = Body(""),
+    overwrite: bool = Body(False, description="是否覆盖目标路径已存在的文件"),
     current_user = Depends(get_current_active_user)
 ):
     """复制文件或目录到指定路径"""
     try:
-        result = await service.copy_file_or_directory(source_path, source_name, destination_path, destination_name)
+        result = await service.copy_file_or_directory(source_path, source_name, destination_path, destination_name, overwrite)
         if result:
             # 处理中文文件名的编码问题
             from urllib.parse import quote

@@ -701,6 +701,8 @@
   "uploadFileFailed": "파일 업로드 실패",
   "fileConflictTitle": "파일 충돌",
   "fileConflictDesc": "다음 파일이 대상 디렉토리에 이미 존재합니다. 덮어쓰시겠습니까?",
+  "fileConflictOverwrite": "덮어쓰기",
+  "fileConflictRename": "이름 바꾸기（-backup 추가）",
   "overwrite": "덮어쓰기",
   "readyToUpload": "준비된 파일",
   "files": "파일",

@@ -700,6 +700,8 @@
   "uploadFileFailed": "ファイルのアップロードに失敗しました",
   "fileConflictTitle": "ファイルの競合",
   "fileConflictDesc": "以下のファイルは既にターゲットディレクトリに存在します。上書きしますか？",
+  "fileConflictOverwrite": "上書き",
+  "fileConflictRename": "リネーム（-backup追加）",
   "overwrite": "上書き",
   "readyToUpload": "アップロード準備完了",
   "files": "ファイル",

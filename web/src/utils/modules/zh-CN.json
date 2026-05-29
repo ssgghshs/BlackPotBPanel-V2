@@ -694,6 +694,8 @@
   "uploadFileFailed": "上传文件失败",
   "fileConflictTitle": "文件冲突",
   "fileConflictDesc": "以下文件已存在于目标目录，是否覆盖？",
+  "fileConflictOverwrite": "覆盖",
+  "fileConflictRename": "重命名（添加 -backup）",
   "overwrite": "覆盖已有文件",
   "readyToUpload": "准备上传",
   "files": "文件",

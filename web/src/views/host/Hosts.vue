@@ -32,6 +32,23 @@
           <icon-refresh />
         </a-button>
       </template>
+      <template #resource="{ record }">
+        <div class="resource-cell" v-if="hostResources[record.id]">
+          <div class="resource-item">
+            <span class="resource-label">CPU</span>
+            <span class="resource-value">{{ hostResources[record.id].cpu }}%</span>
+          </div>
+          <div class="resource-item">
+            <span class="resource-label">MEM</span>
+            <span class="resource-value">{{ hostResources[record.id].memory }}%</span>
+          </div>
+          <div class="resource-item">
+            <span class="resource-label">DISK</span>
+            <span class="resource-value">{{ hostResources[record.id].disk }}%</span>
+          </div>
+        </div>
+        <a-typography-text type="secondary" v-else>-</a-typography-text>
+      </template>
       <template #created_at="{ record }">
         {{ formatDate(record.created_at) }}
       </template>
@@ -238,7 +255,7 @@
 <script setup>
 import { reactive, ref, onMounted, computed, onMounted as onMountedVue, onUnmounted } from 'vue';
 import { t } from '../../utils/locale';
-import { getHosts, createHost, updateHost, deleteHost, testSSHConnection, checkHostStatus } from '../../api/host';
+import { getHosts, createHost, updateHost, deleteHost, testSSHConnection, checkHostStatus, getAllHostResource } from '../../api/host';
 import { Message } from '@arco-design/web-vue';
 import { IconRefresh , IconDown , IconDelete} from '@arco-design/web-vue/es/icon';
 import { CodeOutlined } from '@ant-design/icons-vue';
@@ -262,6 +279,7 @@ onUnmounted(() => {
 
 // 表格相关数据
 const hostData = ref([]);
+const hostResources = ref({});
 const loading = ref(false);
 const pagination = reactive({
   current: 1,
@@ -275,7 +293,7 @@ const pagination = reactive({
 
 // 表格滚动配置
 const scroll = {
-  x: 1300,
+  x: 1550,
   y: 400
 };
 
@@ -317,6 +335,11 @@ const columns = computed(() => [
     dataIndex: 'status',
     slotName: 'status',
     width: 140
+  },
+  {
+    title: resourceText.value,
+    slotName: 'resource',
+    width: 240
   },
   {
     title: createdAtText.value,
@@ -401,6 +424,7 @@ const enterPortText = computed(() => t.value('port'));
 const enterAuthMethodText = computed(() => t.value('authMethod'));
 const enterPasswordText = computed(() => t.value('password'));
 const moreText = computed(() => t.value('more'));
+const resourceText = computed(() => t.value('resource') || '资源占用');
 
 // 添加主机表单验证规则
 const addHostRules = computed(() => ({
@@ -465,6 +489,11 @@ const formatDate = (dateString) => {
   return date.toLocaleString();
 };
 
+// 资源进度条颜色
+const cpuColor = (val) => val > 80 ? '#f53f3f' : val > 50 ? '#ff7d00' : '#00b42a';
+const memColor = (val) => val > 80 ? '#f53f3f' : val > 50 ? '#ff7d00' : '#00b42a';
+const diskColor = (val) => val > 80 ? '#f53f3f' : val > 50 ? '#ff7d00' : '#00b42a';
+
 // 获取主机列表
 const fetchHostList = async (page = 1) => {
   try {
@@ -521,6 +550,9 @@ const fetchHostList = async (page = 1) => {
   } finally {
     loading.value = false;
   }
+  
+  // 获取资源占用
+  fetchHostResources();
 };
 
 // 自动检测所有主机的状态
@@ -544,6 +576,24 @@ const checkAllHostStatus = async () => {
         host.status = 'offline';
       }
     }, 100); // 间隔100ms发起请求
+  }
+};
+
+// 获取所有主机的资源占用
+const fetchHostResources = async () => {
+  try {
+    const data = await getAllHostResource();
+    const map = {};
+    if (Array.isArray(data)) {
+      data.forEach(item => {
+        if (item && item.id != null) {
+          map[item.id] = item;
+        }
+      });
+    }
+    hostResources.value = map;
+  } catch (error) {
+    console.error('获取主机资源占用失败:', error);
   }
 };
 
@@ -892,8 +942,17 @@ const handleTerminalClose = () => {
 };
 
 // 组件挂载时获取主机列表
+let resourceTimer = null;
 onMounted(() => {
   fetchHostList();
+  resourceTimer = setInterval(fetchHostResources, 10000);
+});
+
+onUnmounted(() => {
+  if (resourceTimer) {
+    clearInterval(resourceTimer);
+    resourceTimer = null;
+  }
 });
 </script>
 
@@ -939,5 +998,32 @@ onMounted(() => {
   width: 100%;
 }
 
-/* 根据需要调整其他样式 */
+/* 资源占用列样式 */
+.resource-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+.resource-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.resource-label {
+  width: 36px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.resource-item .arco-progress {
+  flex: 1;
+  min-width: 60px;
+}
+.resource-value {
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
 </style>

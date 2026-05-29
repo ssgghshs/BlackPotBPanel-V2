@@ -738,3 +738,175 @@ async def start_scp_transfer(
         task.update(status="completed", progress=100, message="所有文件传输完成")
 
     return task
+
+
+# ==================== 主机资源监控 ====================
+
+_RESOURCE_SCRIPT = r"""c1=$(awk '/^cpu / {for(i=2;i<=NF;i++) t1+=$i; i1=$5} END {print t1,i1}' /proc/stat)
+sleep 0.1
+c2=$(awk '/^cpu / {for(i=2;i<=NF;i++) t2+=$i; i2=$5} END {print t2,i2}' /proc/stat)
+t1=$(echo "$c1" | awk '{print $1}')
+i1=$(echo "$c1" | awk '{print $2}')
+t2=$(echo "$c2" | awk '{print $1}')
+i2=$(echo "$c2" | awk '{print $2}')
+cpu_pct=$(awk -v t1="$t1" -v t2="$t2" -v i1="$i1" -v i2="$i2" 'BEGIN {printf "%.1f", (1 - (i2-i1)/(t2-t1)) * 100}')
+cores=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 1)
+cpu_usage=$(awk -v p="$cpu_pct" -v c="$cores" 'BEGIN {printf "%.0f", p/100 * c}')
+
+mem=$(awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {printf "%.1f %d", (t-a)/t*100, (t-a)/1024}' /proc/meminfo 2>/dev/null)
+mem_pct=$(echo "$mem" | awk '{print $1}')
+mem_usage=$(echo "$mem" | awk '{print $2}')
+
+disk=$(df -BG / 2>/dev/null | awk 'NR==2 {gsub("G","",$2); gsub("G","",$3); gsub("G","",$4); printf "%.1f %d", $3/$2*100, $3}')
+disk_pct=$(echo "$disk" | awk '{print $1}')
+disk_usage=$(echo "$disk" | awk '{print $2}')
+
+echo "{\"cpu\":$cpu_pct,\"cpu_usage\":$cpu_usage,\"memory\":$mem_pct,\"mem_usage\":$mem_usage,\"disk\":$disk_pct,\"disk_usage\":$disk_usage}"
+"""
+
+_PYTHON_RESOURCE_SCRIPT = r"""
+import os, json, time
+
+try:
+    with open('/proc/stat') as f:
+        c1 = [int(x) for x in f.readline().split()[1:]]
+    time.sleep(0.1)
+    with open('/proc/stat') as f:
+        c2 = [int(x) for x in f.readline().split()[1:]]
+    t1, t2 = sum(c1), sum(c2)
+    i1, i2 = c1[3], c2[3]
+    cpu_pct = round((1 - (i2 - i1) / (t2 - t1)) * 100, 1)
+except Exception:
+    cpu_pct = 0.0
+
+try:
+    cpu_cores = os.cpu_count() or 1
+    cpu_usage_val = round(cpu_pct / 100 * cpu_cores, 1)
+except Exception:
+    cpu_usage_val = 0
+
+try:
+    with open('/proc/meminfo') as f:
+        mem = {}
+        for line in f:
+            parts = line.split()
+            mem[parts[0].rstrip(':')] = int(parts[1])
+    mem_total = mem['MemTotal'] // 1024
+    mem_avail = mem.get('MemAvailable', mem['MemFree'])
+    if isinstance(mem_avail, int):
+        mem_avail = mem_avail // 1024
+    mem_used = mem_total - mem_avail
+    mem_pct = round(mem_used / mem_total * 100, 1)
+except Exception:
+    mem_pct = 0.0
+    mem_used = 0
+
+try:
+    disk = os.statvfs('/')
+    disk_total = (disk.f_frsize * disk.f_blocks) // (1024**3)
+    disk_free = (disk.f_frsize * disk.f_bfree) // (1024**3)
+    disk_used = disk_total - disk_free
+    disk_pct = round(disk_used / disk_total * 100, 1)
+except Exception:
+    disk_pct = 0.0
+    disk_used = 0
+
+print(json.dumps({
+    'cpu': cpu_pct,
+    'cpu_usage': cpu_usage_val,
+    'memory': mem_pct,
+    'mem_usage': mem_used,
+    'disk': disk_pct,
+    'disk_usage': disk_used
+}))
+"""
+
+
+async def get_host_resource_usage(
+    db: AsyncSession,
+    host_id: int,
+) -> dict:
+    """获取指定主机的 CPU、内存、磁盘资源使用情况"""
+    from app.host.ssh_service import SSHService
+
+    result = await db.execute(select(models.Host).where(models.Host.id == host_id))
+    host = result.scalar_one_or_none()
+    if not host:
+        raise ValueError("主机不存在")
+
+    password, private_key, private_key_password = _get_ssh_credentials(host)
+    host_address = getattr(host, 'address', '')
+    host_port = getattr(host, 'port', 22)
+    host_username = getattr(host, 'username', '')
+
+    import base64 as _base64
+    import json as _json
+
+    # 优先用 bash（所有 Linux 都有），回退 Python
+    bash_encoded = _base64.b64encode(_RESOURCE_SCRIPT.encode()).decode()
+    success, stdout, stderr = await SSHService.execute_ssh_command(
+        host=host_address,
+        port=host_port,
+        username=host_username,
+        command=f"echo {bash_encoded} | base64 -d | bash",
+        password=password,
+        private_key=private_key,
+        private_key_password=private_key_password,
+        timeout=15,
+    )
+    if success and stdout.strip():
+        try:
+            data = _json.loads(stdout.strip())
+            if data.get("cpu") is not None:
+                return {
+                    "id": host_id,
+                    "cpu": data["cpu"],
+                    "cpu_usage": int(round(data.get("cpu_usage", 0))),
+                    "memory": data["memory"],
+                    "mem_usage": data.get("mem_usage", 0),
+                    "disk": data["disk"],
+                    "disk_usage": data.get("disk_usage", 0),
+                }
+        except Exception:
+            pass
+
+    # bash 失败时用 Python 回退
+    py_encoded = _base64.b64encode(_PYTHON_RESOURCE_SCRIPT.encode()).decode()
+    for pybin in ["python3", "python"]:
+        success, stdout, stderr = await SSHService.execute_ssh_command(
+            host=host_address,
+            port=host_port,
+            username=host_username,
+            command=f"echo {py_encoded} | base64 -d | {pybin}",
+            password=password,
+            private_key=private_key,
+            private_key_password=private_key_password,
+            timeout=15,
+        )
+        if not success:
+            continue
+        if not stdout.strip():
+            continue
+        try:
+            data = _json.loads(stdout.strip())
+            return {
+                "id": host_id,
+                "cpu": data.get("cpu", 0),
+                "cpu_usage": int(round(data.get("cpu_usage", 0))),
+                "memory": data.get("memory", 0),
+                "mem_usage": data.get("mem_usage", 0),
+                "disk": data.get("disk", 0),
+                "disk_usage": data.get("disk_usage", 0),
+            }
+        except Exception:
+            continue
+
+    return {
+        "id": host_id,
+        "cpu": 0,
+        "cpu_usage": 0,
+        "memory": 0,
+        "mem_usage": 0,
+        "disk": 0,
+        "disk_usage": 0,
+    }

@@ -114,7 +114,7 @@
 <script setup>
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { Message } from '@arco-design/web-vue';
-import { IconFile } from '@arco-design/web-vue/es/icon';
+import { IconFile, IconLoading } from '@arco-design/web-vue/es/icon';
 import { t } from '../../utils/locale';
 import { uploadFile, getFileList } from '../../api/file';
 

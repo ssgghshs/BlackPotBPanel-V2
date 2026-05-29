@@ -391,14 +391,31 @@ async def connect_localhost_ssh(
         logger.error(f"连接本机SSH失败: {e}")
         raise HTTPException(status_code=500, detail=f"连接本机SSH失败: {str(e)}")
 
-# 远程主机相关api
+# 获取所有主机的资源使用情况
+@router.get("/resource/all", response_model=List[schemas.HostResource])
+async def get_all_hosts_resource(
+    db: AsyncSession = Depends(get_db),
+    #current_user: user_models.User = Depends(get_current_active_user)
+):
+    """获取所有主机的CPU、内存、磁盘资源使用情况"""
+    from app.host.remote_service import get_host_resource_usage
 
-# 获取远程主机的文件/目录列表
+    hosts = await service.get_hosts(db, skip=0, limit=1000)
 
+    async def _fetch_resource(host_id):
+        try:
+            return await get_host_resource_usage(db, host_id)
+        except Exception as e:
+            logger.warning(f"获取主机 {host_id} 资源信息失败: {e}")
+            return schemas.HostResource(
+                id=host_id,
+                cpu=0, cpu_usage=0,
+                memory=0, mem_usage=0,
+                disk=0, disk_usage=0,
+            )
 
-# 获取远程主机的资源占用情况
-
-
+    results = await asyncio.gather(*[_fetch_resource(h.id) for h in hosts])
+    return results
 
 
 # HostCommand 相关的 API 路由
