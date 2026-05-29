@@ -840,6 +840,7 @@
   "systemVersion": "시스템 버전",
   "systemArchitecture": "시스템 아키텍처",
   "ipAddress": "IP 주소",
+  "listeningAddress": "리스너 주소",
   "bootTime": "부팅 시간",
   "kernelVersion": "커널 버전",
   "uptime": "상태 시간",
@@ -938,6 +939,7 @@
   "dragFileHere": "파일을 여기에 끌어다 놓으세요",
   "clickOrDragToUpload": "파일을 선택하거나 파일을 끌어다 놓으세요",
   "releaseToUpload": "놓아서 업로드",
+  "processingFile": "파일 처리 중...",
   "selectFile": "파일 선택",
   "selectedFiles": "선택된 파일",
   "clear": "지우기",
@@ -1171,6 +1173,8 @@
   "sslCloseTitle":"SSL을 닫습니다",
   "sslCloseConfirmMessage":"SSL을 닫습니다か？",
   "viewCert":"인증서를 표시합니다",
+  "uploadCertificate":"인증서 파일 업로드",
+  "uploadCertHint":".pem / .crt / .key / .cer 파일 지원, 업로드 후 편집기에 자동 입력",
   "configSaveFailed":"설정 저장에 실패했습니다",
   "__comment15": "// waf 相关",
   "domain":"도메인/포트",
@@ -1426,7 +1430,6 @@
   "deleteRule":"규칙 삭제",
   "deleteRuleConfirm":"이 규칙을 삭제하시겠습니까?",
   "allProtocols":"모든 프로토콜",
-  "ipHint":"IP가 바인딩된 후, 해당 IP 클라이언트만 접근 가능",
 
 
    "__comment16": "// 计划任务",

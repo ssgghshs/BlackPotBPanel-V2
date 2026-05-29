@@ -843,6 +843,7 @@
   "systemVersion": "系统版本",
   "systemArchitecture": "系统架构",
   "ipAddress": "主机地址",
+  "listeningAddress": "监听地址",
   "bootTime": "启动时间",
   "kernelVersion": "内核版本",
   "uptime": "运行时间",
@@ -943,6 +944,7 @@
   "dragFileHere": "将文件拖拽到这里",
   "clickOrDragToUpload": "点击选择文件或拖拽文件上传",
   "releaseToUpload": "松开即可上传",
+  "processingFile": "正在处理文件...",
   "selectFile": "选择文件",
   "selectedFiles": "已选择的文件",
   "clear": "清空",
@@ -1166,6 +1168,8 @@
   "sslCloseTitle":"关闭SSL确认",
   "sslCloseConfirmMessage":"确认关闭SSL？",
   "viewCert":"查看证书",
+  "uploadCertificate":"上传证书文件",
+  "uploadCertHint":"支持 .pem / .crt / .key / .cer 文件，上传后自动填充到编辑器",
   "configSaveFailed":"配置保存失败",
 
   "__comment15": "// waf 相关",
@@ -1413,7 +1417,6 @@
   "deleteRule":"删除规则",
   "deleteRuleConfirm":"确认删除该规则？",
   "allProtocols":"所有协议",
-  "ipHint":"一旦绑定IP,只能通过该IP客户端访问面板",
 
   "__comment16": "// 计划任务",
   "crontabTask": "定时任务",

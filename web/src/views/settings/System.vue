@@ -76,11 +76,10 @@
         <a-tab-pane key="security" :title="t('securitySettings')">
           <template v-if="isAdminUser">
             <a-form :model="systemConfig" layout="horizontal">
-              <a-form-item :label="t('ipAddress') + ':'" class="form-item">
+              <a-form-item :label="t('listeningAddress') + ':'" class="form-item">
                 <a-input v-model="systemConfig.HOST" :placeholder="t('enterHost')" />
                 <a-button type="primary" size="small" style="margin-left: 10px;" @click="showHostDialog">{{ t('save') }}</a-button>
               </a-form-item>
-              <div class="ip-hint">{{ t('ipHint') }}</div>
               <a-form-item :label="t('port') + ':'" class="form-item">
                 <a-input-number v-model="systemConfig.PORT" :min="1" :max="65535" readonly style="width: 100%;" />
                 <a-button type="primary" size="small" style="margin-left: 10px;" @click="showPortDialog">{{ t('settings') }}</a-button>
@@ -129,6 +128,21 @@
       :mask-closable="false"
       :footer="false"
     >
+      <div class="cert-upload-area">
+        <input
+          ref="certFileInputRef"
+          type="file"
+          multiple
+          accept=".pem,.crt,.cert,.key,.cer"
+          style="display: none;"
+          @change="handleCertFileSelect"
+        />
+        <a-button type="secondary" @click="triggerCertFileSelect">
+          <template #icon><icon-upload /></template>
+          {{ t('uploadCertificate') }}
+        </a-button>
+        <span class="cert-upload-hint">{{ t('uploadCertHint') }}</span>
+      </div>
       <div class="cert-content">
         <a-tabs v-model:active-key="activeCertTab" @change="handleCertTabChange">
           <a-tab-pane key="cert" title="PEM">
@@ -139,7 +153,10 @@
           </a-tab-pane>
         </a-tabs>
       </div>
-      <a-button type="primary" style="margin-top: 10px;" @click="saveCertContent">{{ t('save') }}</a-button>
+      <div class="cert-actions">
+        <a-button style="margin-right: 8px;" @click="closeCertDialog">{{ t('cancel') }}</a-button>
+        <a-button type="primary" @click="saveCertContent">{{ t('save') }}</a-button>
+      </div>
     </a-modal>
     
     <!-- 调试模式确认对话框 -->
@@ -223,7 +240,7 @@
 import { reactive, onMounted, computed, ref } from 'vue';
 import { t, changeLocale, getCurrentLocale } from '../../utils/locale'
 import { Message} from '@arco-design/web-vue';
-import { IconLink } from '@arco-design/web-vue/es/icon';
+import { IconLink, IconUpload } from '@arco-design/web-vue/es/icon';
 import { getEnvConfig, updateEnvConfig, restartService, getSSLCert, updateSSLCert } from '../../api/system';
 // 导入用户状态和函数
 import { isAdmin, fetchCurrentUser as fetchCurrentUserStore } from '../../stores/user';
@@ -272,6 +289,7 @@ const sslCertData = ref({
 // Monaco Editor 引用
 const certMonacoEditorRef = ref(null);
 const keyMonacoEditorRef = ref(null);
+const certFileInputRef = ref(null);
 let certMonacoEditor = null;
 let keyMonacoEditor = null;
 
@@ -623,6 +641,43 @@ const closeCertDialog = () => {
     keyMonacoEditor.dispose();
     keyMonacoEditor = null;
   }
+};
+
+// 触发证书文件选择
+const triggerCertFileSelect = () => {
+  if (certFileInputRef.value) {
+    certFileInputRef.value.click();
+  }
+};
+
+// 处理证书文件选择
+const handleCertFileSelect = (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      const lowerName = file.name.toLowerCase();
+
+      if (lowerName.includes('key')) {
+        sslCertData.value.key_content = content;
+        if (keyMonacoEditor) {
+          keyMonacoEditor.setValue(content);
+        }
+      } else {
+        sslCertData.value.cert_content = content;
+        if (certMonacoEditor) {
+          certMonacoEditor.setValue(content);
+        }
+      }
+      Message.success(`${t.value('fileUploaded')}: ${file.name}`);
+    };
+    reader.readAsText(file);
+  }
+
+  e.target.value = '';
 };
 
 // 保存证书内容
@@ -1171,6 +1226,24 @@ const saveSettings = () => {
 .cert-content {
   max-height: 600px;
   overflow: auto;
+}
+
+.cert-upload-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cert-upload-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
+}
+
+.cert-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .cert-text {

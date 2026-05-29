@@ -12,28 +12,36 @@
       <!-- 拖拽上传区域 -->
       <div 
         class="upload-drop-area"
-        :class="{ 'upload-drop-active': isDragging }"
+        :class="{ 'upload-drop-active': isDragging, 'upload-drop-processing': isProcessing }"
         @dragover.prevent="handleDragOver"
         @dragenter.prevent="handleDragEnter"
         @dragleave.prevent="handleDragLeave"
         @drop.prevent="handleDrop"
         @click="triggerFileSelect"
       >
-        <div class="upload-icon">
-          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#165DFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
-            <path d="M12 3v12m0-12L8 7m4-4l4 4"/>
-            <path d="M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/>
-          </svg>
-        </div>
-        <div class="upload-text">
-          {{ t('dragFileHere') }}
-        </div>
-        <div class="upload-hint">
-          {{ t('clickOrDragToUpload') }}
-        </div>
-        <a-button type="primary" size="small" style="margin-top: 16px;">
-          {{ t('selectFile') }}
-        </a-button>
+        <template v-if="isProcessing">
+          <div class="processing-icon">
+            <icon-loading />
+          </div>
+          <div class="processing-text">{{ t('processingFile') }}</div>
+        </template>
+        <template v-else>
+          <div class="upload-icon">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#165DFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;">
+              <path d="M12 3v12m0-12L8 7m4-4l4 4"/>
+              <path d="M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/>
+            </svg>
+          </div>
+          <div class="upload-text">
+            {{ t('dragFileHere') }}
+          </div>
+          <div class="upload-hint">
+            {{ t('clickOrDragToUpload') }}
+          </div>
+          <a-button type="primary" size="small" style="margin-top: 16px;">
+            {{ t('selectFile') }}
+          </a-button>
+        </template>
       </div>
       
       <!-- 文件列表 -->
@@ -125,6 +133,7 @@ const emit = defineEmits(['update:visible', 'upload-success']);
 
 const fileList = ref([]);
 const isDragging = ref(false);
+const isProcessing = ref(false);
 const isUploading = ref(false);
 const uploadProgress = reactive({});
 const abortController = ref(null);
@@ -163,7 +172,9 @@ const triggerFileSelect = () => {
   input.onchange = (e) => {
     const files = Array.from(e.target.files);
     fileList.value = [...fileList.value, ...files];
+    isProcessing.value = false;
   };
+  isProcessing.value = true;
   input.click();
 };
 
@@ -213,6 +224,7 @@ const handleCancelUpload = () => {
 const handleCancel = () => {
   emit('update:visible', false);
   fileList.value = [];
+  isProcessing.value = false;
   isUploading.value = false;
   uploadProgress.value = {};
   abortController.value = null;
@@ -284,8 +296,11 @@ const handleUploadSubmit = async () => {
 
   Message.info(`${t.value('readyToUpload')} ${fileList.value.length} ${t.value('files')}`);
 
+  isProcessing.value = true;
+
   try {
     const res = await getFileList({ path: props.currentPath, skip: 0, limit: 10000 });
+    isProcessing.value = false;
     const existingFiles = res?.data || [];
     const existingNames = new Set(existingFiles.map(f => f.filename));
 
@@ -296,6 +311,7 @@ const handleUploadSubmit = async () => {
       return;
     }
   } catch (error) {
+    isProcessing.value = false;
     console.error('检测文件冲突失败，将直接上传:', error);
   }
 
@@ -314,6 +330,7 @@ watch(() => props.visible, (newVal) => {
   if (!newVal) {
     fileList.value = [];
     isDragging.value = false;
+    isProcessing.value = false;
     isUploading.value = false;
     uploadProgress.value = {};
     abortController.value = null;
@@ -360,6 +377,30 @@ defineExpose({
 .upload-drop-active {
   border-color: #165DFF;
   background-color: #f0f8ff;
+}
+
+.upload-drop-processing {
+  border-color: #165DFF;
+  background-color: #f0f8ff;
+  cursor: default;
+  pointer-events: none;
+}
+
+.processing-icon {
+  margin-bottom: 16px;
+  color: #165DFF;
+  animation: processing-spin 1s linear infinite;
+}
+
+@keyframes processing-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.processing-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #165DFF;
 }
 
 .upload-icon {

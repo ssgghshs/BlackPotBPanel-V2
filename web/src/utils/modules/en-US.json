@@ -822,6 +822,7 @@
   "systemVersion": "System Version",
   "systemArchitecture": "System Architecture",
   "ipAddress": "IP Address",
+  "listeningAddress": "Listening Address",
   "bootTime": "Boot Time",
   "kernelVersion": "Kernel Version",
   "uptime": "Uptime",
@@ -920,6 +921,7 @@
   "dragFileHere": "Drag files here",
   "clickOrDragToUpload": "Click to select files or drag files to upload",
   "releaseToUpload": "Release to upload",
+  "processingFile": "Processing files...",
   "selectFile": "Select File",
   "selectedFiles": "Selected Files",
   "clear": "Clear",
@@ -1153,6 +1155,8 @@
   "sslCloseTitle":"Close SSL Confirm",
   "sslCloseConfirmMessage":"Confirm close SSL?",
   "viewCert":"View Certificate",
+  "uploadCertificate":"Upload Certificate File",
+  "uploadCertHint":"Supports .pem / .crt / .key / .cer files, auto-fills the editor after upload",
   "configSaveFailed":"Config Save Failed",
 
   "__comment15": "// waf 相关",
@@ -1399,7 +1403,6 @@
   "deleteRule":"Delete Rule",
   "deleteRuleConfirm":"Confirm delete this rule?",
   "allProtocols":"All Protocols",
-  "ipHint":"Once bound, only the IP client can access the panel",
 
   "__comment16": "// Crontab Tasks",
   "crontabTask": "Crontab Tasks",
