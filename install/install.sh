@@ -89,6 +89,23 @@ step_confirm() {
         *) CFG_SSL="False" ;;
     esac
     log_info "HTTPS: $([ "$CFG_SSL" = "True" ] && echo '启用' || echo '禁用')"
+
+    echo -ne "是否启用安全入口（隐藏面板登录页，增强安全性）? ${YELLOW}[y/n, 默认 y]${NC}: "
+    read -r entrance_input
+    case "$entrance_input" in
+        n|N)
+            CFG_ENTRANCE=""
+            log_info "安全入口: 禁用"
+            ;;
+        *)
+            CFG_ENTRANCE=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 12 | head -n 1)
+            if [ -z "$CFG_ENTRANCE" ]; then
+                CFG_ENTRANCE="bp$(date +%s | md5sum | head -c 10)"
+            fi
+            log_info "安全入口: ${YELLOW}$CFG_ENTRANCE${NC}"
+            ;;
+    esac
+
     echo ""
     log_info "开始安装..."
 }
@@ -298,6 +315,9 @@ PORT=$CFG_PORT
 
 # SSL配置
 SSL_ENABLED=$CFG_SSL
+
+# 安全入口配置
+SECURITY_ENTRANCE=$CFG_ENTRANCE
 EOF
     log_info "配置文件已创建/更新"
 
@@ -414,8 +434,14 @@ step_done() {
     echo -e "${NC}"
     if [ -n "$ip_addr" ]; then
         echo -e "  面板地址:    ${CYAN}${proto}://${ip_addr}:${CFG_PORT}${NC}"
+        if [ -n "$CFG_ENTRANCE" ]; then
+            echo -e "  入口地址:    ${CYAN}${proto}://${ip_addr}:${CFG_PORT}/${CFG_ENTRANCE}${NC}"
+        fi
     fi
     echo -e "  面板地址:    ${CYAN}${proto}://localhost:${CFG_PORT}${NC}"
+    if [ -n "$CFG_ENTRANCE" ]; then
+        echo -e "  入口地址:    ${CYAN}${proto}://localhost:${CFG_PORT}/${CFG_ENTRANCE}${NC}"
+    fi
     echo ""
     echo -e "  默认账号:    ${YELLOW}admin${NC}"
     echo -e "  默认密码:    ${YELLOW}admin@123${NC}"

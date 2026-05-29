@@ -89,6 +89,23 @@ step_confirm() {
         *) CFG_SSL="False" ;;
     esac
     log_info "HTTPS: $([ "$CFG_SSL" = "True" ] && echo 'enabled' || echo 'disabled')"
+
+    echo -ne "Enable security entrance (hide login page, enhance security)? ${YELLOW}[y/n, default y]${NC}: "
+    read -r entrance_input
+    case "$entrance_input" in
+        n|N)
+            CFG_ENTRANCE=""
+            log_info "Security entrance: disabled"
+            ;;
+        *)
+            CFG_ENTRANCE=$(tr -dc 'a-zA-Z0-9' < /dev/urandom 2>/dev/null | fold -w 12 | head -n 1)
+            if [ -z "$CFG_ENTRANCE" ]; then
+                CFG_ENTRANCE="bp$(date +%s | md5sum | head -c 10)"
+            fi
+            log_info "Security entrance: ${YELLOW}$CFG_ENTRANCE${NC}"
+            ;;
+    esac
+
     echo ""
     log_info "Starting installation..."
 }
@@ -298,6 +315,9 @@ PORT=$CFG_PORT
 
 # SSL Settings
 SSL_ENABLED=$CFG_SSL
+
+# Security Entrance
+SECURITY_ENTRANCE=$CFG_ENTRANCE
 EOF
     log_info "Configuration file created/updated"
 
@@ -414,8 +434,14 @@ step_done() {
     echo -e "${NC}"
     if [ -n "$ip_addr" ]; then
         echo -e "  Panel URL:    ${CYAN}${proto}://${ip_addr}:${CFG_PORT}${NC}"
+        if [ -n "$CFG_ENTRANCE" ]; then
+            echo -e "  Entrance URL: ${CYAN}${proto}://${ip_addr}:${CFG_PORT}/${CFG_ENTRANCE}${NC}"
+        fi
     fi
     echo -e "  Panel URL:    ${CYAN}${proto}://localhost:${CFG_PORT}${NC}"
+    if [ -n "$CFG_ENTRANCE" ]; then
+        echo -e "  Entrance URL: ${CYAN}${proto}://localhost:${CFG_PORT}/${CFG_ENTRANCE}${NC}"
+    fi
     echo ""
     echo -e "  Username:     ${YELLOW}admin${NC}"
     echo -e "  Password:     ${YELLOW}admin@123${NC}"
