@@ -51,6 +51,7 @@ class HostSimple(BaseModel):
     address: str
     username: str
     port: int = 22
+    status: str = "unknown"
 
     class Config:
         from_attributes = True

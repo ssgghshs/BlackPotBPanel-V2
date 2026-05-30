@@ -61,7 +61,39 @@ async def read_file_transfer_hosts(
     """
     try:
         hosts = await service.get_hosts(db, skip=0, limit=1000)
-        return hosts
+
+        async def _check(host):
+            try:
+                result = await service.check_host_status(
+                    host_address=getattr(host, 'address', ''),
+                    port=getattr(host, 'port', 22)
+                )
+                status = "online" if result.get("is_alive") else "offline"
+            except Exception:
+                status = "offline"
+            return host.id, schemas.HostSimple(
+                id=host.id,
+                comment=getattr(host, 'comment', ''),
+                address=getattr(host, 'address', ''),
+                username=getattr(host, 'username', ''),
+                port=getattr(host, 'port', 22),
+                status=status,
+            )
+
+        tasks = [asyncio.create_task(_check(h)) for h in hosts]
+        done, pending = await asyncio.wait(tasks, timeout=8)
+        for task in pending:
+            task.cancel()
+
+        result_map = {}
+        for task in done:
+            try:
+                hid, simple = task.result()
+                result_map[hid] = simple
+            except Exception:
+                pass
+        results = [result_map[h.id] for h in hosts if h.id in result_map]
+        return results
     except Exception as e:
         logger.error(f"获取文件传输主机列表失败: {e}")
         raise HTTPException(status_code=500, detail="获取文件传输主机列表失败")
@@ -395,7 +427,7 @@ async def connect_localhost_ssh(
 @router.get("/resource/all", response_model=List[schemas.HostResource])
 async def get_all_hosts_resource(
     db: AsyncSession = Depends(get_db),
-    #current_user: user_models.User = Depends(get_current_active_user)
+    current_user: user_models.User = Depends(get_current_active_user)
 ):
     """获取所有主机的CPU、内存、磁盘资源使用情况"""
     from app.host.remote_service import get_host_resource_usage
@@ -404,17 +436,41 @@ async def get_all_hosts_resource(
 
     async def _fetch_resource(host_id):
         try:
-            return await get_host_resource_usage(db, host_id)
+            resource = await get_host_resource_usage(db, host_id)
+            return host_id, resource
         except Exception as e:
             logger.warning(f"获取主机 {host_id} 资源信息失败: {e}")
-            return schemas.HostResource(
+            return host_id, schemas.HostResource(
                 id=host_id,
                 cpu=0, cpu_usage=0,
                 memory=0, mem_usage=0,
                 disk=0, disk_usage=0,
             )
 
-    results = await asyncio.gather(*[_fetch_resource(h.id) for h in hosts])
+    tasks = [asyncio.create_task(_fetch_resource(h.id)) for h in hosts]
+    done, pending = await asyncio.wait(tasks, timeout=6)
+    for task in pending:
+        task.cancel()
+
+    result_map = {}
+    for task in done:
+        try:
+            host_id, resource = task.result()
+            result_map[host_id] = resource
+        except Exception:
+            pass
+
+    results = []
+    for host in hosts:
+        if host.id in result_map:
+            results.append(result_map[host.id])
+        else:
+            results.append(schemas.HostResource(
+                id=host.id,
+                cpu=0, cpu_usage=0,
+                memory=0, mem_usage=0,
+                disk=0, disk_usage=0,
+            ))
     return results
 
 
