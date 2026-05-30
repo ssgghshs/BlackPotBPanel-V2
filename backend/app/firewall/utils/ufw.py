@@ -8,6 +8,7 @@ class UfwManager:
     def __init__(self):
         self.cmd = shutil.which('ufw') or "/usr/sbin/ufw"
         self.systemctl = shutil.which('systemctl') or "/usr/bin/systemctl"
+        self.bash = shutil.which('bash') or "/bin/bash"
 
     def status(self) -> bool:
         try:
@@ -44,7 +45,7 @@ class UfwManager:
     def start(self) -> Dict:
         try:
             subprocess.run(
-                ["/usr/bin/bash", "-c", f"echo y | {self.cmd} enable"],
+                [self.bash, "-c", f"echo y | {self.cmd} enable"],
                 check=True, timeout=10
             )
             return {"status": True, "msg": "ufw已启动"}
@@ -62,7 +63,7 @@ class UfwManager:
         try:
             subprocess.run([self.cmd, "disable"], check=True, timeout=10)
             subprocess.run(
-                ["/usr/bin/bash", "-c", f"echo y | {self.cmd} enable"],
+                [self.bash, "-c", f"echo y | {self.cmd} enable"],
                 check=True, timeout=10
             )
             return {"status": True, "msg": "ufw已重启"}
