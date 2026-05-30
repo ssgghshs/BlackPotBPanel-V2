@@ -153,8 +153,56 @@ step_check_system() {
 
         # Upper bound: >= 3.13 is not supported
         if [ "$py_major" -gt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 13 ]; }; then
-            log_error "Python version ($py_version) is too high, panel supports up to Python 3.12"
-            exit 1
+            log_warn "Python version ($py_version) is too high, panel supports Python 3.10-3.12"
+            echo ""
+            echo -ne "Compile and install Python to /opt? ${YELLOW}[y/n]${NC}: "
+            read -r py_choice
+            case "$py_choice" in
+                y|Y)
+                    echo -ne "Select Python version to compile (1: 3.10, 2: 3.11, 3: 3.12) ${YELLOW}[default 3]${NC}: "
+                    read -r py_ver_choice
+                    case "$py_ver_choice" in
+                        1|3.10)
+                            PY_VER="3.10.16"
+                            PY_VER_SHORT="3.10"
+                            PY_DIR="python3.10"
+                            ;;
+                        2|3.11)
+                            PY_VER="3.11.11"
+                            PY_VER_SHORT="3.11"
+                            PY_DIR="python3.11"
+                            ;;
+                        *)
+                            PY_VER="3.12.9"
+                            PY_VER_SHORT="3.12"
+                            PY_DIR="python3.12"
+                            ;;
+                    esac
+                    log_info "Compiling Python $PY_VER to /opt/$PY_DIR..."
+                    $PKG_INSTALL $DEV_PKGS wget
+                    cd /opt
+                    wget -q "https://www.python.org/ftp/python/$PY_VER/Python-$PY_VER.tgz"
+                    tar -xzf "Python-$PY_VER.tgz"
+                    cd "Python-$PY_VER"
+                    ./configure --prefix="/opt/$PY_DIR"
+                    make -j"$(nproc)"
+                    make altinstall
+                    cd /
+                    rm -rf "/opt/Python-$PY_VER" "/opt/Python-$PY_VER.tgz"
+                    PYTHON_CMD="/opt/$PY_DIR/bin/python$PY_VER_SHORT"
+                    VENV_DIR="$BASE_DIR/venv"
+                    log_info "Python $PY_VER compiled and installed"
+                    ;;
+                n|N)
+                    log_error "Installation cancelled, Python 3.10-3.12 is required"
+                    exit 1
+                    ;;
+                *)
+                    log_error "Invalid input"
+                    exit 1
+                    ;;
+            esac
+            return
         fi
 
         if [ "$py_major" -lt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -lt 10 ]; }; then
