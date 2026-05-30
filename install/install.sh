@@ -150,27 +150,53 @@ step_check_system() {
         py_version=$(python3 --version 2>&1 | awk '{print $2}')
         py_major=$(echo "$py_version" | cut -d. -f1)
         py_minor=$(echo "$py_version" | cut -d. -f2)
+
+        # 版本上限检查：>= 3.13 的不支持
+        if [ "$py_major" -gt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 13 ]; }; then
+            log_error "Python 版本 ($py_version) 过高，面板最高支持 Python 3.12"
+            exit 1
+        fi
+
         if [ "$py_major" -lt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -lt 10 ]; }; then
             log_warn "Python 版本 ($py_version) 低于 3.10"
             echo ""
-            echo -ne "是否编译安装 Python 3.10 到 /opt/python3.10? ${YELLOW}[y/n]${NC}: "
+            echo -ne "是否编译安装 Python 到 /opt? ${YELLOW}[y/n]${NC}: "
             read -r py_choice
             case "$py_choice" in
                 y|Y)
-                    log_info "开始编译安装 Python 3.10..."
+                    echo -ne "选择要编译的 Python 版本 (1: 3.10, 2: 3.11, 3: 3.12) ${YELLOW}[默认 1]${NC}: "
+                    read -r py_ver_choice
+                    case "$py_ver_choice" in
+                        2|3.11)
+                            PY_VER="3.11.11"
+                            PY_VER_SHORT="3.11"
+                            PY_DIR="python3.11"
+                            ;;
+                        3|3.12)
+                            PY_VER="3.12.9"
+                            PY_VER_SHORT="3.12"
+                            PY_DIR="python3.12"
+                            ;;
+                        *)
+                            PY_VER="3.10.16"
+                            PY_VER_SHORT="3.10"
+                            PY_DIR="python3.10"
+                            ;;
+                    esac
+                    log_info "开始编译安装 Python $PY_VER 到 /opt/$PY_DIR..."
                     $PKG_INSTALL $DEV_PKGS wget
                     cd /opt
-                    wget -q https://www.python.org/ftp/python/3.10.10/Python-3.10.10.tgz
-                    tar -xzf Python-3.10.10.tgz
-                    cd Python-3.10.10
-                    ./configure --prefix=/opt/python3.10
+                    wget -q "https://www.python.org/ftp/python/$PY_VER/Python-$PY_VER.tgz"
+                    tar -xzf "Python-$PY_VER.tgz"
+                    cd "Python-$PY_VER"
+                    ./configure --prefix="/opt/$PY_DIR"
                     make -j"$(nproc)"
                     make altinstall
                     cd /
-                    rm -rf /opt/Python-3.10.10 /opt/Python-3.10.10.tgz
-                    PYTHON_CMD="/opt/python3.10/bin/python3.10"
+                    rm -rf "/opt/Python-$PY_VER" "/opt/Python-$PY_VER.tgz"
+                    PYTHON_CMD="/opt/$PY_DIR/bin/python$PY_VER_SHORT"
                     VENV_DIR="$BASE_DIR/venv"
-                    log_info "Python 3.10 编译安装完成"
+                    log_info "Python $PY_VER 编译安装完成"
                     ;;
                 n|N)
                     log_error "已取消安装，需要 Python 3.10+ 才能运行面板"

@@ -150,27 +150,53 @@ step_check_system() {
         py_version=$(python3 --version 2>&1 | awk '{print $2}')
         py_major=$(echo "$py_version" | cut -d. -f1)
         py_minor=$(echo "$py_version" | cut -d. -f2)
+
+        # Upper bound: >= 3.13 is not supported
+        if [ "$py_major" -gt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 13 ]; }; then
+            log_error "Python version ($py_version) is too high, panel supports up to Python 3.12"
+            exit 1
+        fi
+
         if [ "$py_major" -lt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -lt 10 ]; }; then
             log_warn "Python version ($py_version) is below 3.10"
             echo ""
-            echo -ne "Compile and install Python 3.10 to /opt/python3.10? ${YELLOW}[y/n]${NC}: "
+            echo -ne "Compile and install Python to /opt? ${YELLOW}[y/n]${NC}: "
             read -r py_choice
             case "$py_choice" in
                 y|Y)
-                    log_info "Compiling Python 3.10 from source..."
+                    echo -ne "Select Python version to compile (1: 3.10, 2: 3.11, 3: 3.12) ${YELLOW}[default 1]${NC}: "
+                    read -r py_ver_choice
+                    case "$py_ver_choice" in
+                        2|3.11)
+                            PY_VER="3.11.11"
+                            PY_VER_SHORT="3.11"
+                            PY_DIR="python3.11"
+                            ;;
+                        3|3.12)
+                            PY_VER="3.12.9"
+                            PY_VER_SHORT="3.12"
+                            PY_DIR="python3.12"
+                            ;;
+                        *)
+                            PY_VER="3.10.16"
+                            PY_VER_SHORT="3.10"
+                            PY_DIR="python3.10"
+                            ;;
+                    esac
+                    log_info "Compiling Python $PY_VER to /opt/$PY_DIR..."
                     $PKG_INSTALL $DEV_PKGS wget
                     cd /opt
-                    wget -q https://www.python.org/ftp/python/3.10.10/Python-3.10.10.tgz
-                    tar -xzf Python-3.10.10.tgz
-                    cd Python-3.10.10
-                    ./configure --prefix=/opt/python3.10
+                    wget -q "https://www.python.org/ftp/python/$PY_VER/Python-$PY_VER.tgz"
+                    tar -xzf "Python-$PY_VER.tgz"
+                    cd "Python-$PY_VER"
+                    ./configure --prefix="/opt/$PY_DIR"
                     make -j"$(nproc)"
                     make altinstall
                     cd /
-                    rm -rf /opt/Python-3.10.10 /opt/Python-3.10.10.tgz
-                    PYTHON_CMD="/opt/python3.10/bin/python3.10"
+                    rm -rf "/opt/Python-$PY_VER" "/opt/Python-$PY_VER.tgz"
+                    PYTHON_CMD="/opt/$PY_DIR/bin/python$PY_VER_SHORT"
                     VENV_DIR="$BASE_DIR/venv"
-                    log_info "Python 3.10 compiled and installed"
+                    log_info "Python $PY_VER compiled and installed"
                     ;;
                 n|N)
                     log_error "Installation cancelled, Python 3.10+ is required"
