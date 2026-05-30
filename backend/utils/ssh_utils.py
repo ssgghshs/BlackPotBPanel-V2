@@ -699,7 +699,7 @@ class SSHLogReader:
         """
         
         # 尝试解析成功登录
-        success_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+[^\s]+\s+sshd\[\d+\]:\s+Accepted\s+(password|publickey)\s+for\s+(\w+)\s+from\s+([\d\.]+)\s+port\s+(\d+)'
+        success_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+[^\s]+\s+sshd(-\w+)?\[\d+\]:\s+Accepted\s+(password|publickey)\s+for\s+(\w+)\s+from\s+([\d\.]+)\s+port\s+(\d+)'
         success_match = re.search(success_pattern, log_line)
         
         if success_match:
@@ -711,20 +711,20 @@ class SSHLogReader:
             
             return {
                 "time": formatted_time,
-                "method": success_match.group(2),
-                "username": success_match.group(3),
-                "ip": success_match.group(4),
-                "port": success_match.group(5),
+                "method": success_match.group(3),
+                "username": success_match.group(4),
+                "ip": success_match.group(5),
+                "port": success_match.group(6),
                 "status": "success",
                 "raw": log_line
             }
         
         # 尝试解析失败登录
-        failed_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+[^\s]+\s+sshd\[\d+\]:\s+Failed\s+(password|publickey)\s+for\s+(invalid\s+user\s+)?(\w+)?\s+from\s+([\d\.]+)\s+port\s+(\d+)'
+        failed_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+[^\s]+\s+sshd(-\w+)?\[\d+\]:\s+Failed\s+(password|publickey)\s+for\s+(invalid\s+user\s+)?(\w+)?\s+from\s+([\d\.]+)\s+port\s+(\d+)'
         failed_match = re.search(failed_pattern, log_line)
         
         if failed_match:
-            username = failed_match.group(4) if failed_match.group(4) else "invalid"
+            username = failed_match.group(5) if failed_match.group(5) else "invalid"
             # 获取原始时间字符串
             raw_time = failed_match.group(1)
             # 添加当前年份并重新格式化
@@ -733,10 +733,10 @@ class SSHLogReader:
             
             return {
                 "time": formatted_time,
-                "method": failed_match.group(2),
+                "method": failed_match.group(3),
                 "username": username,
-                "ip": failed_match.group(5),
-                "port": failed_match.group(6),
+                "ip": failed_match.group(6),
+                "port": failed_match.group(7),
                 "status": "failed",
                 "raw": log_line
             }
@@ -842,8 +842,8 @@ class SSHLogReader:
                        "@{LogName='Security'; ID=4624,4625}", "-MaxEvents", "1000"]
             else:
                 # Linux/Unix系统使用grep搜索日志
-                cmd_parts = ["/usr/bin/grep", "sshd", "-E", 
-                             "(Accepted|Failed) (password|publickey) for"]
+                cmd_parts = ["/usr/bin/grep", "-E", 
+                             "(sshd|sshd-session)[^:]*:\s+(Accepted|Failed)\s+(password|publickey)\s+for"]
                 
                 # 添加日志文件路径
                 log_path = SSHLogReader.find_ssh_log_file()
