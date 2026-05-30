@@ -132,7 +132,7 @@ step_check_system() {
             DEV_PKGS="build-essential libssl-dev libbz2-dev libffi-dev zlib1g-dev libreadline-dev libsqlite3-dev tar ipset ufw"
             apt-get update -y
             ;;
-        centos|rhel|rocky|almalinux|openEuler|kylin|anolis|NingOS)
+        centos|rhel|rocky|almalinux|openEuler|kylin|anolis|NingOS|uos)
             PKG_MANAGER="dnf"
             PKG_INSTALL="dnf install -y"
             PYTHON_PKG="python3 python3-pip python3-devel"
