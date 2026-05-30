@@ -10,7 +10,10 @@
     <div v-else-if="hostInfo" class="info-list">
       <div class="info-item" v-for="(value, key) in formattedHostInfo" :key="key">
         <span>{{ value.label }}:</span>
-        <span>{{ value.content }}</span>
+        <span>
+          <component :is="value.icon" v-if="value.icon" :size="16" style="vertical-align: middle; margin-right: 4px;" />
+          {{ value.content }}
+        </span>
       </div>
     </div>
   </div>
@@ -20,6 +23,20 @@
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { getHostInfo } from '../../api/monitor'
 import { t } from '../../utils/locale'
+import Redhat from '../icon/osicon/Redhat.vue'
+import Centos from '../icon/osicon/Centos.vue'
+import Ubuntu from '../icon/osicon/Ubuntu.vue'
+import Debian from '../icon/osicon/Debian.vue'
+
+function detectOsIcon(version) {
+  if (!version) return null
+  const v = version.toLowerCase()
+  if (v.includes('red hat') || v.includes('rhel')) return Redhat
+  if (v.includes('centos')) return Centos
+  if (v.includes('ubuntu')) return Ubuntu
+  if (v.includes('debian')) return Debian
+  return null
+}
 
 // 响应式数据
 const hostInfo = ref(null)
@@ -43,7 +60,8 @@ const formattedHostInfo = computed(() => {
     },
     platform_version: {
       label: t.value('systemVersion'),
-      content: hostInfo.value.platform_version
+      content: hostInfo.value.platform_version,
+      icon: detectOsIcon(hostInfo.value.platform_version),
     },
     kernel_version: {
       label: t.value('kernelVersion'),

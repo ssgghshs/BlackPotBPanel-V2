@@ -136,7 +136,7 @@
             <a-select
               v-model="selectedHostId"
               :placeholder="t('selectHostsPlaceholder')"
-              style="width: 250px;"
+              style="width: 280px;"
               :loading="hostsLoading"
               allow-clear
               @change="handleHostChange"
@@ -146,7 +146,16 @@
                 :key="host.id"
                 :value="host.id"
                 :label="`${host.comment || host.address} (${host.address})`"
-              />
+                :disabled="host.status === 'offline'"
+              >
+                <a-space>
+                  <a-tag :color="host.status === 'online' ? 'green' : 'red'" size="small">
+                    {{ host.status === 'online' ? 'ON' : 'OFF' }}
+                  </a-tag>
+                  <span>{{ host.comment || host.address }}</span>
+                  <span style="color: var(--color-text-3); font-size: 12px;">({{ host.address }})</span>
+                </a-space>
+              </a-option>
             </a-select>
           </a-form-item>
         </div>
