@@ -33,6 +33,7 @@ BlackPotBPanel 是一款使用AI仿照BT面板基于vue+fastapi开发的linux管
 | kylin-v10| ✅ |
 | openEuler-24.03 | ✅ |
 | uos-server-20.04 | ✅ |
+| AnolisOS-8.0+ | ✅ |
 | AnolisOS-23.0+ | ✅ |
 | NingOS-v3 | ✅ |
 --------------
