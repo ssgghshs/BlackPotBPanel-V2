@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     # waf站点配置
     WAF_SITE_WWW_PATH: str = f"{_BASE_PANEL}/waf/sites/www/"
     WAF_SITE_CONF_PATH: str = f"{_BASE_PANEL}/waf/sites/conf/"
+    WAF_SITE_CONFIG_PATH: str = f"{_BASE_PANEL}/waf/sites/config/"
     WAF_SITE_LOG_PATH: str = f"{_BASE_PANEL}/waf/sites/sitelogs/"
 
     # waf日志配置

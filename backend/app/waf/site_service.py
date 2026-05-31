@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import json
 import logging
 from typing import Optional, Dict, List, Tuple
 from datetime import datetime, timedelta
@@ -8,6 +9,53 @@ from config.settings import settings
 from app.waf.manager_service import WAFManagerService
 
 logger = logging.getLogger(__name__)
+
+
+_DEFAULT_SITE_CONFIG = {
+    "waf_mode": "record",
+    "cc_enabled": True,
+    "sql_enabled": True,
+    "xss_enabled": True,
+    "ssrf_enabled": True,
+    "cmd_injection_enabled": True,
+    "ldap_injection_enabled": True,
+    "csrf_enabled": True,
+    "file_inclusion_enabled": True,
+    "file_upload_enabled": True,
+    "scanner_enabled": True,
+    "bot_enabled": True,
+    "bot_verify_enabled": 1,
+    "blackwhite_enabled": True,
+}
+
+
+def _get_site_config_path(site_name: str) -> str:
+    return os.path.join(settings.WAF_SITE_CONFIG_PATH, f"{site_name}_config.json")
+
+
+def _load_site_config(site_name: str) -> dict:
+    config_path = _get_site_config_path(site_name)
+    if not os.path.exists(config_path):
+        return dict(_DEFAULT_SITE_CONFIG)
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load site config for {site_name}: {e}")
+        return dict(_DEFAULT_SITE_CONFIG)
+
+
+def _save_site_config(site_name: str, config: dict):
+    config_path = _get_site_config_path(site_name)
+    os.makedirs(settings.WAF_SITE_CONFIG_PATH, exist_ok=True)
+    try:
+        merged = dict(_DEFAULT_SITE_CONFIG)
+        merged.update(config)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to save site config for {site_name}: {e}")
+        raise
 
 
 class WAFSiteService:
@@ -101,10 +149,6 @@ class WAFSiteService:
             # Parse site type
             site_type = "Static Site" if "root /usr/local/openresty/nginx/html" in content else "Reverse Proxy"
             
-            # Parse WAF mode
-            waf_mode_match = re.search(r'waf_mode\s+"([^"]+)"', content)
-            waf_mode = waf_mode_match.group(1) if waf_mode_match else "block"
-            
             # Parse domain
             server_name_match = re.search(r'server_name\s+([^;]+);', content)
             domain = server_name_match.group(1).strip() if server_name_match else ""
@@ -123,36 +167,36 @@ class WAFSiteService:
                 if ssl_cert_match:
                     ssl_cert_name = ssl_cert_match.group(1)
             
-            # Parse bot verification
-            bot_enabled_match = re.search(r'bot_enabled\s+(\d+)', content)
-            bot_verify_enabled_match = re.search(r'bot_verify_enabled\s+(\d+)', content)
-            bot_enabled = bot_enabled_match.group(1) if bot_enabled_match else "0"
-            bot_verify_enabled = bot_verify_enabled_match.group(1) if bot_verify_enabled_match else "0"
+            # Parse WAF control settings from JSON config
+            site_config = _load_site_config(site_name)
+            waf_mode = site_config.get("waf_mode", "record")
             
-            bot_status = "Disabled"
-            if bot_enabled == "1":
-                if bot_verify_enabled == "0":
+            bot_enabled = site_config.get("bot_enabled", True)
+            bot_verify_enabled = site_config.get("bot_verify_enabled", 1)
+            if not bot_enabled:
+                bot_status = "Disabled"
+            else:
+                if bot_verify_enabled == 0:
                     bot_status = "Silent Verification"
-                elif bot_verify_enabled == "1":
+                elif bot_verify_enabled == 1:
                     bot_status = "5s Verification"
-                elif bot_verify_enabled == "2":
+                elif bot_verify_enabled == 2:
                     bot_status = "Slide Verification"
+                else:
+                    bot_status = "5s Verification"
             
-            # Parse CC protection
-            cc_enabled_match = re.search(r'cc_enabled\s+(\d+)', content)
-            cc_status = "Enabled" if (cc_enabled_match and cc_enabled_match.group(1) == "1") else "Disabled"
+            cc_status = "Enabled" if site_config.get("cc_enabled", True) else "Disabled"
             
-            # Parse detailed protection status
             protection_status = {
-                "sql_injection": WAFSiteService._parse_protection_status(content, "sql_enabled"),
-                "xss": WAFSiteService._parse_protection_status(content, "xss_enabled"),
-                "command_injection": WAFSiteService._parse_protection_status(content, "cmd_injection_enabled"),
-                "ssrf": WAFSiteService._parse_protection_status(content, "ssrf_enabled"),
-                "ldap_injection": WAFSiteService._parse_protection_status(content, "ldap_injection_enabled"),
-                "csrf": WAFSiteService._parse_protection_status(content, "csrf_enabled"),
-                "file_inclusion": WAFSiteService._parse_protection_status(content, "file_inclusion_enabled"),
-                "file_upload": WAFSiteService._parse_protection_status(content, "file_upload_enabled"),
-                "scanner": WAFSiteService._parse_protection_status(content, "scanner_enabled")
+                "sql_injection": "Enabled" if site_config.get("sql_enabled", True) else "Disabled",
+                "xss": "Enabled" if site_config.get("xss_enabled", True) else "Disabled",
+                "command_injection": "Enabled" if site_config.get("cmd_injection_enabled", True) else "Disabled",
+                "ssrf": "Enabled" if site_config.get("ssrf_enabled", True) else "Disabled",
+                "ldap_injection": "Enabled" if site_config.get("ldap_injection_enabled", True) else "Disabled",
+                "csrf": "Enabled" if site_config.get("csrf_enabled", True) else "Disabled",
+                "file_inclusion": "Enabled" if site_config.get("file_inclusion_enabled", True) else "Disabled",
+                "file_upload": "Enabled" if site_config.get("file_upload_enabled", True) else "Disabled",
+                "scanner": "Enabled" if site_config.get("scanner_enabled", True) else "Disabled",
             }
             
             # Parse upstream server / static root path
@@ -166,7 +210,7 @@ class WAFSiteService:
             today_requests = WAFSiteService._count_today_requests(site_name)
             
             # Count today's blocks
-            today_blocks = WAFSiteService._count_today_blocks(site_name, domain, port, is_ssl)
+            today_blocks = WAFSiteService._count_today_blocks(site_name)
             
             return {
                 "name": site_name,
@@ -220,32 +264,34 @@ class WAFSiteService:
             return 0
     
     @staticmethod
-    def _count_today_blocks(site_name: str, domain: str, port: str, is_ssl: bool) -> int:
+    def _count_today_blocks(site_name: str) -> int:
         """统计今日拦截数
+        
+        读取站点访问日志，统计今日返回 HTTP 403 的请求数
+        （WAF block 模式统一返回 403）
         
         Args:
             site_name: 站点名称
-            domain: 域名
-            port: 端口
-            is_ssl: 是否SSL
             
         Returns:
             今日拦截数
         """
         try:
-            if not os.path.exists(settings.WAF_LOG_PATH):
+            log_dir = os.path.join(settings.WAF_SITE_LOG_PATH, site_name)
+            access_log_path = os.path.join(log_dir, f"{site_name}_access.log")
+            
+            if not os.path.exists(access_log_path):
                 return 0
             
-            today = datetime.now().strftime("%Y-%m-%d")
+            today = datetime.now().strftime("%d/%b/%Y")
             count = 0
             
-            # 构建应用标识
-            scheme = "https" if is_ssl else "http"
-            application = f"{scheme}://{domain}:{port}"
-            
-            with open(settings.WAF_LOG_PATH, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(access_log_path, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
-                    if today in line and application in line:
+                    if today not in line:
+                        continue
+                    match = re.search(r'"\s+(\d{3})\s+', line)
+                    if match and match.group(1) == '403':
                         count += 1
             
             return count
@@ -328,71 +374,46 @@ class WAFSiteService:
     
     @staticmethod
     async def update_site(site_name: str, update_data: Dict[str, any]) -> Dict[str, str]:
-        """更新指定站点的配置
-        
-        Args:
-            site_name: 站点名称
-            update_data: 更新数据
-            
-        Returns:
-            更新结果
-        """
         try:
-            # 构建配置文件路径
             conf_path = os.path.join(settings.WAF_SITE_CONF_PATH, f"{site_name}.conf")
-            
-            # 检查文件是否存在
             if not os.path.exists(conf_path):
                 return {"message": f"Site configuration file not found: {conf_path}"}
-            
-            # 读取配置文件内容
+
             with open(conf_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
-            
-            # 更新WAF模式
-            if 'waf_mode' in update_data:
-                content = re.sub(r'set \$waf_mode "([^"]+)";', f'set $waf_mode "{update_data["waf_mode"]}";', content)
-            
-            # 更新BOT验证
-            if 'bot_enabled' in update_data:
-                content = re.sub(r'set \$bot_enabled (\d+);', f'set $bot_enabled {update_data["bot_enabled"]};', content)
-            if 'bot_verify_enabled' in update_data:
-                content = re.sub(r'set \$bot_verify_enabled (\d+);', f'set $bot_verify_enabled {update_data["bot_verify_enabled"]};', content)
-            
-            # 更新域名
+
+            # WAF 控制参数 → JSON 配置（无需重启容器）
+            waf_keys = {'waf_mode', 'bot_enabled', 'bot_verify_enabled', 'cc_enabled'}
+            json_update = {k: update_data[k] for k in waf_keys if k in update_data}
+            if json_update:
+                site_config = _load_site_config(site_name)
+                site_config.update(json_update)
+                _save_site_config(site_name, site_config)
+
+            # Nginx 参数 → conf 文件（需重启容器）
             if 'domain' in update_data:
                 content = re.sub(r'server_name\s+[^;]+;', f'server_name {update_data["domain"]};', content)
-            
-            # 更新端口
+
             if 'port' in update_data:
-                # 处理SSL端口
                 if 'ssl' in content.lower():
                     content = re.sub(r'listen\s+\d+\s*ssl;', f'listen {update_data["port"]} ssl;', content)
                 else:
                     content = re.sub(r'listen\s+\d+;', f'listen {update_data["port"]};', content)
-            
-            # 更新CC防护
-            if 'cc_enabled' in update_data:
-                content = re.sub(r'set \$cc_enabled (\d+);', f'set $cc_enabled {update_data["cc_enabled"]};', content)
-            
-            # 更新上游服务器（仅限反向代理站点）
+
             if 'upstream_server' in update_data and 'proxy_pass' in content:
                 content = re.sub(r'proxy_pass\s+[^;]+;', f'proxy_pass {update_data["upstream_server"]};', content)
-            
-            # 写回配置文件
+
             with open(conf_path, 'w', encoding='utf-8', errors='ignore') as f:
                 f.write(content)
-            
-            # 自动重启WAF容器使配置生效
+
             try:
                 await WAFManagerService.operate_waf_container('restart')
                 logger.info(f"Successfully restarted WAF container after updating site {site_name}")
             except Exception as restart_error:
                 logger.error(f"Failed to restart WAF container: {str(restart_error)}")
-                # 重启失败不影响配置更新结果
-            
+
             return {"message": f"Successfully updated site {site_name} and restarted WAF container"}
-            
+
         except Exception as e:
             logger.error(f"更新站点配置失败: {str(e)}")
             return {"message": f"Failed to update site: {str(e)}"}
@@ -502,18 +523,6 @@ class WAFSiteService:
             更新结果
         """
         try:
-            # 构建配置文件路径
-            conf_path = os.path.join(settings.WAF_SITE_CONF_PATH, f"{site_name}.conf")
-            
-            # 检查文件是否存在
-            if not os.path.exists(conf_path):
-                return {"message": f"Site configuration file not found: {conf_path}"}
-            
-            # 读取配置文件内容
-            with open(conf_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-            
-            # 映射配置字段到配置文件中的变量名
             protection_mapping = {
                 'sql_injection': 'sql_enabled',
                 'xss': 'xss_enabled',
@@ -523,38 +532,22 @@ class WAFSiteService:
                 'csrf': 'csrf_enabled',
                 'file_inclusion': 'file_inclusion_enabled',
                 'file_upload': 'file_upload_enabled',
-                'scanner': 'scanner_enabled'
+                'scanner': 'scanner_enabled',
             }
-            
-            # 更新防护配置
+
+            json_update = {}
             for key, value in protection_data.items():
                 if key in protection_mapping:
-                    config_key = protection_mapping[key]
-                    enabled_value = 1 if value else 0
-                    # 替换配置值
-                    content = re.sub(
-                        rf'set \${config_key} \d+;',
-                        f'set ${config_key} {enabled_value};',
-                        content
-                    )
-            
-            # 清理多余的空行
-            content = re.sub(r'\n{3,}', '\n\n', content)
-            
-            # 写回配置文件
-            with open(conf_path, 'w', encoding='utf-8', errors='ignore') as f:
-                f.write(content)
-            
-            # 自动重启WAF容器使配置生效
-            try:
-                await WAFManagerService.operate_waf_container('restart')
-                logger.info(f"Successfully restarted WAF container after updating protection config for site {site_name}")
-            except Exception as restart_error:
-                logger.error(f"Failed to restart WAF container: {str(restart_error)}")
-                return {"message": f"Config saved but WAF restart failed: {str(restart_error)}"}
-            
+                    json_update[protection_mapping[key]] = bool(value)
+
+            if json_update:
+                site_config = _load_site_config(site_name)
+                site_config.update(json_update)
+                _save_site_config(site_name, site_config)
+
+            logger.info(f"Updated protection config for site {site_name}")
             return {"status": "success", "message": f"Successfully updated protection config for site {site_name}"}
-            
+
         except Exception as e:
             logger.error(f"更新站点漏洞防护配置失败: {str(e)}")
             return {"message": f"Internal error: {str(e)}"}
@@ -768,23 +761,8 @@ class WAFSiteService:
                     "message": f"Site already exists: {site_name}"
                 }
 
-            waf_protection_settings = (
-                '    set $waf_mode "record";\n'
-                '    set $cc_enabled 1;\n'
-                '    set $sql_enabled 1;\n'
-                '    set $xss_enabled 1;\n'
-                '    set $ssrf_enabled 1;\n'
-                '    set $cmd_injection_enabled 1;\n'
-                '    set $ldap_injection_enabled 1;\n'
-                '    set $csrf_enabled 1;\n'
-                '    set $file_inclusion_enabled 1;\n'
-                '    set $file_upload_enabled 1;\n'
-                '    set $scanner_enabled 1;\n'
-                '    set $bot_enabled 1;\n'
-                '    set $bot_verify_enabled 1;\n'
-                '    set $waf_type "-";\n'
-                '    set $waf_action "-";\n'
-            )
+            site_name_directive = f'    set $site_name "{site_name}";\n'
+            waf_vars_include = '    include /usr/local/openresty/nginx/conf/waf_default_vars.conf;\n'
 
             security_headers = (
                 '    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;\n'
@@ -845,7 +823,8 @@ class WAFSiteService:
                     f'    {listen_directive}\n'
                     f'    server_name {domain};'
                     f'{ssl_block}\n\n'
-                    f'{waf_protection_settings}\n'
+                    f'{site_name_directive}'
+                    f'{waf_vars_include}'
                     f'{security_headers}\n'
                     f'    root /usr/local/openresty/nginx/html/{site_name};\n'
                     f'    index index.html;\n\n'
@@ -880,7 +859,8 @@ class WAFSiteService:
                     f'    {listen_directive}\n'
                     f'    server_name {domain};'
                     f'{ssl_block}\n\n'
-                    f'{waf_protection_settings}\n'
+                    f'{site_name_directive}'
+                    f'{waf_vars_include}'
                     f'{security_headers}\n'
                     f'{log_config}\n'
                     f'{waf_lua_config}\n'
@@ -904,6 +884,8 @@ class WAFSiteService:
             with open(conf_path, 'w', encoding='utf-8') as f:
                 f.write(conf_content)
             logger.info(f"Created site config file: {conf_path}")
+
+            _save_site_config(site_name, {})
 
             log_dir = os.path.join(settings.WAF_SITE_LOG_PATH, site_name)
             os.makedirs(log_dir, exist_ok=True)
@@ -970,6 +952,11 @@ class WAFSiteService:
 
             os.remove(conf_path)
             logger.info(f"Deleted site config file: {conf_path}")
+
+            config_path = _get_site_config_path(site_name)
+            if os.path.exists(config_path):
+                os.remove(config_path)
+                logger.info(f"Deleted site JSON config: {config_path}")
 
             if site_type == "Static Site":
                 www_path = os.path.join(settings.WAF_SITE_WWW_PATH, site_name)
