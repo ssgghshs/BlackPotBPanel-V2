@@ -58,6 +58,51 @@ def _save_site_config(site_name: str, config: dict):
         raise
 
 
+_SITE_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
+
+def _normalize_site_name(name: str) -> Tuple[str, str]:
+    """将站点名称规范化：中文自动转拼音slug
+
+    示例:
+        "我的站点" → ("我的站点", "wodezhandian")
+        "My Site 中文" → ("My Site 中文", "my_site_zhongwen")
+        "test_site-1" → ("test_site-1", "test_site-1")
+
+    Returns:
+        (original_name, safe_slug)
+        - original_name: 用户输入的原始名称
+        - safe_slug: 安全可用的拼音slug（用于文件名/nginx配置）
+    """
+    if not name or not name.strip():
+        raise ValueError("site_name is required")
+
+    if _SITE_NAME_PATTERN.match(name):
+        return name, name
+
+    try:
+        from pypinyin import lazy_pinyin
+        parts = []
+        for char in name:
+            pinyin_list = lazy_pinyin(char)
+            if pinyin_list:
+                parts.append(pinyin_list[0])
+            else:
+                parts.append('')
+        slug = ''.join(parts)
+    except ImportError:
+        slug = re.sub(r'[^\w.\-]', '', name)
+
+    slug = re.sub(r'[^\w.\-]', '-', slug)
+    slug = re.sub(r'-+', '-', slug)
+    slug = re.sub(r'_+', '_', slug)
+    slug = slug.strip('._-')
+
+    if not slug:
+        raise ValueError(f"Unable to generate a safe site name from: {name}")
+
+    return name, slug
+
+
 class WAFSiteService:
     """WAF站点服务类"""
     
@@ -211,9 +256,12 @@ class WAFSiteService:
             
             # Count today's blocks
             today_blocks = WAFSiteService._count_today_blocks(site_name)
-            
+
+            display_name = site_config.get("display_name", site_name)
+
             return {
                 "name": site_name,
+                "display_name": display_name,
                 "type": site_type,
                 "waf_mode": waf_mode,
                 "domain": domain,
@@ -375,6 +423,8 @@ class WAFSiteService:
     @staticmethod
     async def update_site(site_name: str, update_data: Dict[str, any]) -> Dict[str, str]:
         try:
+            _, site_name = _normalize_site_name(site_name)
+
             conf_path = os.path.join(settings.WAF_SITE_CONF_PATH, f"{site_name}.conf")
             if not os.path.exists(conf_path):
                 return {"message": f"Site configuration file not found: {conf_path}"}
@@ -711,7 +761,7 @@ class WAFSiteService:
         - 反向代理站点：创建 conf + 日志目录
 
         Args:
-            site_name: 站点名称
+            site_name: 站点名称（支持中文，自动转拼音作为内部标识）
             site_type: 站点类型: Static Site / Reverse Proxy
             domain: 域名
             port: 端口
@@ -724,6 +774,8 @@ class WAFSiteService:
             创建结果
         """
         try:
+            display_name, site_name = _normalize_site_name(site_name)
+
             if site_type not in ["Static Site", "Reverse Proxy"]:
                 return {
                     "site_name": site_name,
@@ -885,7 +937,7 @@ class WAFSiteService:
                 f.write(conf_content)
             logger.info(f"Created site config file: {conf_path}")
 
-            _save_site_config(site_name, {})
+            _save_site_config(site_name, {"display_name": display_name})
 
             log_dir = os.path.join(settings.WAF_SITE_LOG_PATH, site_name)
             os.makedirs(log_dir, exist_ok=True)

@@ -242,7 +242,8 @@ class WAFSiteLogResponse(BaseModel):
 
 class WAFSiteInfo(BaseModel):
     """WAF Site Info Model"""
-    name: str = Field(..., description="Site name")
+    name: str = Field(..., description="Site name (internal slug)")
+    display_name: str = Field(..., description="Site display name (original name input by user)")
     type: str = Field(..., description="Site type: Static Site/Reverse Proxy")
     waf_mode: str = Field(..., description="WAF mode: block=block, record=record, Maintenance=maintenance")
     domain: str = Field(..., description="Domain")
