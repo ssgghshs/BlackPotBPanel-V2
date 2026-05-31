@@ -598,7 +598,7 @@ async def cancel_pull_image(
     node_id: int,
     cancel_data: ImagePullCancelRequest,
     db: AsyncSession = Depends(get_container_db),
-    #current_user = Depends(get_current_active_user)
+    current_user = Depends(get_current_active_user)
 ):
     return await DockerImageService.cancel_pull_image(db, node_id, cancel_data)
 
