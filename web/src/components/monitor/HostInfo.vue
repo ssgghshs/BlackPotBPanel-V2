@@ -27,6 +27,15 @@ import Redhat from '../icon/osicon/Redhat.vue'
 import Centos from '../icon/osicon/Centos.vue'
 import Ubuntu from '../icon/osicon/Ubuntu.vue'
 import Debian from '../icon/osicon/Debian.vue'
+import Almalinux from '../icon/osicon/Almalinux.vue'
+import OpenEuler from '../icon/osicon/OpenEuler.vue'
+import Anolis from '../icon/osicon/Anolis.vue'
+import Kylin from '../icon/osicon/Kylin.vue'
+import Rocky from '../icon/osicon/Rocky.vue'
+import Uos from '../icon/osicon/Uos.vue'
+import Linux from '../icon/osicon/Linux.vue'
+
+
 
 function detectOsIcon(version) {
   if (!version) return null
@@ -35,7 +44,13 @@ function detectOsIcon(version) {
   if (v.includes('centos')) return Centos
   if (v.includes('ubuntu')) return Ubuntu
   if (v.includes('debian')) return Debian
-  return null
+  if (v.includes('almalinux')) return Almalinux
+  if (v.includes('openeuler')) return OpenEuler
+  if (v.includes('anolis')) return Anolis
+  if (v.includes('kylin')) return Kylin
+  if (v.includes('rocky')) return Rocky
+  if (v.includes('uos')) return Uos
+  return Linux
 }
 
 // 响应式数据
