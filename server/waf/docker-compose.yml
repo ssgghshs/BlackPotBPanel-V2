@@ -13,8 +13,12 @@ services:
       - ./conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
       # 错误页面配置文件
       - ./conf/error_locations.conf:/usr/local/openresty/nginx/conf/error_locations.conf:ro
+      # WAF 默认变量声明
+      - ./conf/waf_default_vars.conf:/usr/local/openresty/nginx/conf/waf_default_vars.conf:ro
       # 站点配置文件
       - ./sites/conf:/usr/local/openresty/nginx/conf/conf.d:ro
+      # 站点 JSON 配置（WAF 控制参数）
+      - ./sites/config:/usr/local/openresty/nginx/sites/config:ro
       # 静态网站文件
       - ./sites/www:/usr/local/openresty/nginx/html:ro
       # 站点日志文件

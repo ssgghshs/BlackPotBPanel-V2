@@ -33,12 +33,12 @@ function _M.evaluate()
     local config = _M.load_config()
     if not config.enabled then return nil end
 
-    -- 1. 检查 URL 参数 (GET)
+    -- 1. 检查 URL 参数值 (GET) - 仅检查值，不检查参数名
     local args = ngx.req.get_uri_args()
     if args then
-        for key, val in pairs(args) do
+        for _, val in pairs(args) do
             if type(val) == "table" then val = table.concat(val, " ") end
-            if _M.check_xss_injection(key, config.rules) or _M.check_xss_injection(val, config.rules) then
+            if _M.check_xss_injection(val, config.rules) then
                 return { hit = true, reason = "XSS in URL Args", attack_type = "xss", action = ngx.var.waf_mode or config.action or "record" }
             end
         end
@@ -49,9 +49,9 @@ function _M.evaluate()
         ngx.req.read_body()
         local post_args = ngx.req.get_post_args()
         if post_args then
-            for key, val in pairs(post_args) do
+            for _, val in pairs(post_args) do
                 if type(val) == "table" then val = table.concat(val, " ") end
-                if _M.check_xss_injection(key, config.rules) or _M.check_xss_injection(val, config.rules) then
+                if _M.check_xss_injection(val, config.rules) then
                     return { hit = true, reason = "XSS in POST Args", attack_type = "xss", action = ngx.var.waf_mode or config.action or "record" }
                 end
             end

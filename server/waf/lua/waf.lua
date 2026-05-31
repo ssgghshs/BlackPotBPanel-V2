@@ -52,42 +52,156 @@ end
 -- ============================================================
 
 -- ============================================================
--- Payload 特征驱动分类器（与检测模块解耦）
+-- Payload 特征驱动分类器（特异性评分机制）
 -- ============================================================
+-- 参考 AAWAF 设计原则：
+-- 1. 特异性越高的规则权重越大（如 UNION SELECT > <script）
+-- 2. 综合得分最高的类型胜出，而非先到先得
+-- 3. 所有攻击类型（cmd/ssrf/ldap/file_inclusion/sql/xss）纳入评分
+-- 4. 没有特征匹配时，按危险度优先级（RCE > SSRF > SQL > ...）取结果
 
 local function classify_payload(payload)
     if not payload then return nil end
     local lower = string.lower(payload)
     local upper = string.upper(payload)
 
-    -- XSS: 标签 + 事件 + 协议特征（高度特异性）
-    local xss_patterns = {
-        "<script", "javascript:", "onerror=", "onload=",
-        "onclick=", "onmouseover=", "onfocus=", "onblur=",
-        "onchange=", "onsubmit=",
-        "<img ", "<svg ", "<iframe", "<body",
-        "document%.cookie", "alert%(", "confirm%(", "prompt%(",
-        "<a href=", "expression%("
+    local scores = {
+        cmd_injection = 0,
+        ssrf = 0,
+        ldap_injection = 0,
+        file_inclusion = 0,
+        sql = 0,
+        xss = 0,
     }
-    for _, p in ipairs(xss_patterns) do
-        if string.find(lower, p, 1, true) then return "xss" end
+
+    -- 规则表：{ 文本, 使用大写, 类别, 权重 }
+    -- use_upper=true 匹配 upper，否则匹配 lower
+    local rules = {
+        -- cmd_injection: shell 元字符 + 系统命令（RCE，最高危）
+        { ";cat ", true, "cmd_injection", 25 },
+        { ";ls ", true, "cmd_injection", 25 },
+        { ";id ", true, "cmd_injection", 25 },
+        { ";whoami", true, "cmd_injection", 25 },
+        { ";pwd ", true, "cmd_injection", 22 },
+        { ";curl ", true, "cmd_injection", 22 },
+        { ";wget ", true, "cmd_injection", 22 },
+        { ";bash ", true, "cmd_injection", 22 },
+        { ";sh ", true, "cmd_injection", 20 },
+        { ";nc ", true, "cmd_injection", 20 },
+        { ";net ", true, "cmd_injection", 15 },
+        { ";ping ", true, "cmd_injection", 15 },
+        { ";php ", true, "cmd_injection", 15 },
+        { ";python", true, "cmd_injection", 15 },
+        { "`cat", false, "cmd_injection", 25 },
+        { "`id", false, "cmd_injection", 25 },
+        { "`ls", false, "cmd_injection", 22 },
+        { "$(", false, "cmd_injection", 20 },
+        { "exec(", false, "cmd_injection", 18 },
+        { "system(", false, "cmd_injection", 18 },
+        { "passthru(", false, "cmd_injection", 18 },
+        { "shell_exec(", false, "cmd_injection", 18 },
+        { "popen(", false, "cmd_injection", 18 },
+        { "eval(", false, "cmd_injection", 15 },
+
+        -- ssrf: 危险协议 + 内网地址
+        { "gopher://", false, "ssrf", 25 },
+        { "dict://", false, "ssrf", 25 },
+        { "expect://", false, "ssrf", 25 },
+        { "tftp://", false, "ssrf", 20 },
+        { "jar://", false, "ssrf", 20 },
+        { "netdoc://", false, "ssrf", 20 },
+        { "file://", false, "ssrf", 12 },
+        { "127.0.0.1", false, "ssrf", 10 },
+        { "0.0.0.0", false, "ssrf", 10 },
+        { "localhost", false, "ssrf", 6 },
+
+        -- ldap_injection: LDAP 过滤器语法
+        { ")(&(", false, "ldap_injection", 25 },
+        { ")(|(", false, "ldap_injection", 25 },
+        { ")(!(", false, "ldap_injection", 25 },
+        { "objectclass=", false, "ldap_injection", 15 },
+        { "uid=*", false, "ldap_injection", 10 },
+        { "cn=*", false, "ldap_injection", 10 },
+
+        -- file_inclusion: PHP 封装器 + 路径穿越
+        { "php://", false, "file_inclusion", 22 },
+        { "phar://", false, "file_inclusion", 22 },
+        { "zip://", false, "file_inclusion", 20 },
+        { "/etc/passwd", false, "file_inclusion", 15 },
+        { "/windows/win.ini", false, "file_inclusion", 15 },
+        { "../..", false, "file_inclusion", 8 },
+        { "..\\..", false, "file_inclusion", 8 },
+        { "%2e%2e%2f", true, "file_inclusion", 12 },
+        { "%2e%2e%5c", true, "file_inclusion", 12 },
+
+        -- sql: 高特异性关键字
+        { "UNION(", true, "sql", 20 },
+        { "UNION ALL", true, "sql", 20 },
+        { "UNION SELECT", true, "sql", 30 },
+        { "INSERT INTO", true, "sql", 20 },
+        { "DELETE FROM", true, "sql", 20 },
+        { "INFORMATION_SCHEMA", true, "sql", 25 },
+        { "SLEEP(", true, "sql", 20 },
+        { "BENCHMARK(", true, "sql", 20 },
+        { "LOAD_FILE(", true, "sql", 25 },
+        { "INTO OUTFILE", true, "sql", 25 },
+        { "INTO DUMPFILE", true, "sql", 25 },
+        { "CONCAT(", true, "sql", 10 },
+        { "SUBSTRING(", true, "sql", 10 },
+        { "MID(", true, "sql", 5 },
+        { "' OR ", true, "sql", 15 },
+        { " OR '1'='1", true, "sql", 20 },
+        { " OR 1=1", true, "sql", 15 },
+        { " AND '1'='1", true, "sql", 15 },
+        { " AND 1=1", true, "sql", 10 },
+        { "SELECT ", true, "sql", 4 },
+        { "DROP ", true, "sql", 15 },
+        { "FROM ", true, "sql", 2 },
+        { "WHERE ", true, "sql", 2 },
+        { "GROUP BY", true, "sql", 8 },
+        { "ORDER BY", true, "sql", 8 },
+
+        -- xss: 低权重避免误判
+        { "document.cookie", false, "xss", 12 },
+        { "javascript:", false, "xss", 10 },
+        { "onerror=", false, "xss", 8 },
+        { "onload=", false, "xss", 8 },
+        { "alert(", false, "xss", 8 },
+        { "confirm(", false, "xss", 8 },
+        { "prompt(", false, "xss", 8 },
+        { "<iframe", false, "xss", 8 },
+        { "<script", false, "xss", 5 },
+        { "<svg ", false, "xss", 5 },
+        { "<img ", false, "xss", 4 },
+        { "onfocus=", false, "xss", 4 },
+        { "onclick=", false, "xss", 4 },
+        { "<a href=", false, "xss", 4 },
+        { "onmouseover=", false, "xss", 6 },
+        { "expression(", false, "xss", 10 },
+        { "onblur=", false, "xss", 3 },
+        { "onchange=", false, "xss", 3 },
+        { "onsubmit=", false, "xss", 4 },
+        { "<body", false, "xss", 2 },
+    }
+
+    for _, rule in ipairs(rules) do
+        local source = rule[2] and upper or lower
+        if string.find(source, rule[1], 1, true) then
+            scores[rule[3]] = scores[rule[3]] + rule[4]
+        end
     end
 
-    -- SQL: 关键字 + 运算符特征（高度特异性）
-    local sql_patterns = {
-        "UNION", "SELECT", "INSERT", "UPDATE", "DELETE", "DROP",
-        "CREATE", "ALTER", "EXECUTE", "FROM", "WHERE",
-        "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET",
-        "INFORMATION_SCHEMA", "SLEEP%(", "BENCHMARK%(",
-        "COUNT%(", "CONCAT%(", "SUBSTR", "MID%(",
-        "LOAD_FILE%(", "INTO OUTFILE", "INTO DUMPFILE",
-        "%27 OR ", "%27 AND "
-    }
-    for _, p in ipairs(sql_patterns) do
-        if string.find(upper, p, 1, true) then return "sql" end
+    -- 找出得分最高的类别
+    local best_type = nil
+    local best_score = 0
+    for t, s in pairs(scores) do
+        if s > best_score then
+            best_score = s
+            best_type = t
+        end
     end
 
-    return nil
+    return best_type
 end
 
 -- 全量检测 + payload驱动分类
@@ -127,6 +241,7 @@ function _M.evaluate_all_attacks()
     payload = ngx.unescape_uri(payload)
 
     local best_type = classify_payload(payload)
+    -- 兜底：按危险度优先级取第一个命中（cmd > ssrf > ldap > sql > csrf > file_inclusion > file_upload > xss）
     local best_hit = hits[1]
 
     if best_type then
@@ -194,7 +309,11 @@ end
 -- ============================================================
 
 function _M.check()
-    -- 0. 静态资源白名单
+    -- 0. 加载站点 JSON 配置并写入 ngx.var
+    local site_config = require("site_config")
+    site_config.apply_to_ngx_var()
+
+    -- 1. 静态资源白名单
     if _M.is_static_resource() then return true end
 
     -- 1. 正常路由白名单
@@ -205,7 +324,7 @@ function _M.check()
     end
 
     -- 2. 维护模式
-    local waf_mode = ngx.var.waf_mode or ""
+    local waf_mode = site_config.get("waf_mode", "")
     if waf_mode == "Maintenance" then
         local file = io.open("/usr/local/openresty/nginx/waf_html/maintenance.html", "r")
         if file then

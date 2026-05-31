@@ -5,31 +5,44 @@
 
 ## 1. 扫描器User-Agent测试
 # 测试使用Nmap扫描器的User-Agent
+```bash
 curl -X GET http://your-site.com/ \
   -H "User-Agent: Nmap Scripting Engine"
+```  
 
+```bash
 # 测试使用SQLmap扫描器的User-Agent
 curl -X GET http://your-site.com/ \
   -H "User-Agent: sqlmap/1.7.9#stable (http://sqlmap.org)"
+```  
 
+```bash
 # 测试使用Burp Suite的User-Agent
 curl -X GET http://your-site.com/ \
   -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 BurpSuite"
+```  
 
 ## 2. 爬虫User-Agent测试
 # 测试使用Googlebot的User-Agent（应该允许）
+```bash
 curl -X GET http://your-site.com/ \
   -H "User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+```  
 
+```bash 
 # 测试使用Bingbot的User-Agent（应该允许）
 curl -X GET http://your-site.com/ \
   -H "User-Agent: Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)"
+```  
 
+```bash 
 # 测试使用AhrefsBot的User-Agent（应该拦截）
 curl -X GET http://your-site.com/ \
-  -H "User-Agent: Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)"
+  -H "User-Agent: Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot)"
+```         
 
-## 3. 扫描器路径测试
+## 3. 扫描器路径测试  
+```bash
 # 测试访问.git目录
 curl -X GET http://your-site.com/.git/
 
@@ -134,7 +147,7 @@ http://your-site.com/search?filter=normal
 
 
 # 9.CSRF防护测试用例
-
+```bash
 ## 测试URL格式：
 # http://your-site.com/page
 
@@ -184,7 +197,7 @@ curl http://your-site.com/api/users
 
 ## 8. CSRF Token测试（如果启用）
 # 测试带有CSRF Token的请求
-curl -X POST http://your-site.com/api/users \
+curl -X POST http://192.168.223.180/api/users \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: valid-token-from-session" \
   -H "Referer: https://your-site.com" \
@@ -216,7 +229,8 @@ curl -X PATCH http://your-site.com/api/users/1 \
   -H "Content-Type: application/json" \
   -H "Referer: https://evil.com" \
   -d '{"name":"patched"}'
-
+```  
+  
 ## 预期结果：
 # 1-3, 9-12的测试用例应该被CSRF防护拦截
 # 4-8的测试用例应该正常通过（取决于配置）
@@ -229,15 +243,15 @@ curl -X PATCH http://your-site.com/api/users/1 \
 
 
 # 10.文件包含与路径遍历防护测试用例
-
+```bash
 ## 测试URL格式：
 # http://your-site.com/page?param=value
 
 ## 1. 路径遍历测试
 # 测试基本的路径遍历
-http://your-site.com/page?file=../../etc/passwd
-http://your-site.com/page?file=../../../etc/shadow
-http://your-site.com/page?file=../index.php
+http://192.168.223.180/page?file=../../etc/passwd
+http://192.168.223.180/page?file=../../../etc/shadow
+http://192.168.223.180/page?file=../index.php
 
 ## 2. 编码路径遍历测试
 # 测试URL编码的路径遍历
@@ -294,6 +308,7 @@ http://your-site.com/api/files?file=../../../etc/shadow
 # 测试多种技术的组合
 http://your-site.com/page?file=..%2F..%2F%2Fetc%2Fpasswd
 http://your-site.com/page?file=file:///../etc/passwd
+```  
 
 ## 预期结果：
 # 1-6, 10的测试用例应该被文件包含与路径遍历防护拦截
@@ -307,19 +322,19 @@ http://your-site.com/page?file=file:///../etc/passwd
 
 
 # 恶意文件上传防护测试用例
-
+```bash
 ## 测试方法：
 # 使用curl命令发送文件上传请求
 
 ## 1. 上传PHP文件测试
 # 测试上传PHP文件
-curl -X POST http://your-site.com/api/upload \
+curl -X POST http://192.168.223.180/api/upload \
   -F "file=@test.php" \
   -H "Content-Type: multipart/form-data"
 
 ## 2. 上传JavaScript文件测试
 # 测试上传JavaScript文件
-curl -X POST http://your-site.com/api/upload \
+curl -X POST http://192.168.223.180/api/upload \
   -F "file=@test.js" \
   -H "Content-Type: multipart/form-data"
 
@@ -400,7 +415,8 @@ curl -X POST http://your-site.com/api/upload \
 curl -X POST http://your-site.com/api/upload \
   -F "file=@test.php;type=image/jpeg" \
   -H "Content-Type: multipart/form-data"
-
+```  
+  
 ## 预期结果：
 # 1-9, 14-15的测试用例应该被恶意文件上传防护拦截
 # 10-13的测试用例应该正常通过
