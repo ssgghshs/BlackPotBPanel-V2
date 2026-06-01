@@ -53,7 +53,7 @@
       <a-tooltip v-if="!isAuditor()" :content="t('waf')" :disabled="!isMenuCollapsed" mini position="right">
         <a-menu-item key="waf">
           <template #icon><icon-safe /></template>
-          <span v-show="!isMenuCollapsed">{{ t('waf') }}</span>
+          <span v-show="!isMenuCollapsed">{{ t('waf') }} (Bata)</span>
         </a-menu-item>
       </a-tooltip>
 

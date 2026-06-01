@@ -96,8 +96,14 @@
               </template>
               {{ localSiteInfo.upstream_server || '-' }}
             </a-card>
-            <a-card v-if="localSiteInfo.type === 'Static Site'" :title="t('staticFilePath')"> 
+            <a-card v-if="localSiteInfo.type === 'Static Site' || localSiteInfo.type === 'PHP Site'" :title="t('staticFilePath')"> 
               {{ localSiteInfo.upstream_server || '-' }}
+            </a-card>
+            <a-card v-if="localSiteInfo.type === 'PHP Site'" :title="t('phpFpmHost')"> 
+              <template #extra>
+                <a-button size="small" type="outline" @click="handleEditPhpFpm">{{ t('config') }}</a-button>
+              </template>
+              {{ localSiteInfo.php_fpm_host || '-' }}
             </a-card>
 
           </div>
@@ -283,6 +289,9 @@
         <a-form-item v-if="editModalType === 'upstream'" :label="t('upstreamServer')">
           <a-input v-model="editForm.upstream_server" :placeholder="t('enterUpstreamServer')" />
         </a-form-item>
+        <a-form-item v-if="editModalType === 'php_fpm'" :label="t('phpFpmHost')">
+          <a-input v-model="editForm.php_fpm_host" :placeholder="t('enterPhpFpmHost')" />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -363,7 +372,8 @@ const editModalType = ref('');
 const editForm = ref({
   domain: '',
   port: '',
-  upstream_server: ''
+  upstream_server: '',
+  php_fpm_host: ''
 });
 
 // SSL配置对话框状态
@@ -479,6 +489,14 @@ const handleEditUpstream = () => {
   editModalVisible.value = true;
 };
 
+// 处理编辑 PHP-FPM 地址
+const handleEditPhpFpm = () => {
+  editModalTitle.value = t.value('editPhpFpmHost');
+  editModalType.value = 'php_fpm';
+  editForm.value.php_fpm_host = localSiteInfo.value.php_fpm_host || '';
+  editModalVisible.value = true;
+};
+
 // 处理确认
 const handleConfirm = async () => {
   if (!pendingUpdate.value || !localSiteInfo.value.name) return;
@@ -538,6 +556,8 @@ const handleEditConfirm = async () => {
       updateData.port = editForm.value.port;
     } else if (editModalType.value === 'upstream') {
       updateData.upstream_server = editForm.value.upstream_server;
+    } else if (editModalType.value === 'php_fpm') {
+      updateData.php_fpm_host = editForm.value.php_fpm_host;
     }
     
     const response = await updateBasicSiteConfig(localSiteInfo.value.name, updateData);

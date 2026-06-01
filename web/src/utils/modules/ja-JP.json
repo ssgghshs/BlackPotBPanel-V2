@@ -1277,6 +1277,7 @@
   "slideVerification":"スライド認証",
   "staticSite":"静的サイト",
   "reverseProxy":"逆プロキシ",
+  "phpSite":"PHPサイト",
   "siteName":"サイト名前",
   "vulnerabilityProtection":"脆弱性保護",
   "siteDetail":"サイト詳細",
@@ -1378,11 +1379,14 @@
   "createSite":"サイトを作成",
   "indexContent":"インデックスコンテンツ",
   "enterSiteName":"サイト名前を入力してください",
-  "indexContentPlaceholder":"静的サイトのみ有効な自定義インデックスコンテンツを入力してください",
+  "indexContentPlaceholder":"静的サイトとPHPサイトのみ有効な自定義インデックスコンテンツを入力してください",
   "enterUpstreamServer":"アップストリームサーバーを入力してください",
+  "phpFpmHost":"PHP-FPM ホスト",
+  "enterPhpFpmHost":"PHP-FPM ホストを入力してください（デフォルト: 127.0.0.1:9000）",
   "invalidUpstreamServer":"無効なアップストリームサーバーです（逆プロキシのみ）",
   "fillRequiredFields":"必須項目を入力してください",
   "editUpstreamServer":"アップストリームサーバーを編集する",
+  "editPhpFpmHost":"PHP-FPM ホストを編集する",
   "fillUpstreamServer":"アップストリームサーバーを入力してください",
   "ldapUpload":"LDAPアップロード",
   "intelligencePlatform":"情報の脅威",
@@ -1683,5 +1687,6 @@
   "scpProgressConnectFailed": "送�送進捗サービスに接続失敗",
   "scpStartFailed": "送�送タスクを開始失敗",
   "pleaseSelectHost": "リモートホストを選択してください。",
-  "commandDeletedSuccessfully": "コマンドを削除成功"
+  "commandDeletedSuccessfully": "コマンドを削除成功",
+  "commandNameRequired": "コマンド名前を入力してください。"
 }

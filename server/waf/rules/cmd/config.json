@@ -1,9 +1,16 @@
 {
     "enabled": true,
     "rules": [
-        "[;\\|&!><\\x60\\$\\(\\)]",
-        "\\b(cat|ls|id|whoami|pwd|ifconfig|ipconfig|netstat|uname|ping|curl|wget|nc|bash|sh|php|python|perl|ruby|java|powershell|cmd|net\\s+user)\\b",
-        "/etc/(passwd|shadow|group|hosts|issue)",
-        "\\b(System\\.Diagnostics\\.Process|Runtime\\.getRuntime|exec|eval|passthru|system|shell_exec|popen)\\b"
+        "[;\\|&\\x60\\n\\r]\\s*\\b(cat|ls|id|whoami|pwd|ifconfig|ipconfig|netstat|uname|ping|curl|wget|nc|bash|sh|python|perl|ruby|php|java|powershell|cmd|net\\s+user|systeminfo)\\b",
+        "\\$\\s*\\(",
+        "\\b(exec|eval|passthru|system|shell_exec|popen|pcntl_exec|assert|create_function|call_user_func_array|invokefunction)\\s*\\(",
+        "\\x60.*?\\x60",
+        "\\|\\s*(cat|ls|id|whoami|pwd|curl|wget|nc|bash|sh|python|php)",
+        "/etc/(passwd|shadow|group|hosts|issue|sudoers|crontab)",
+        "\\$\\{jndi:",
+        "base64_decode\\s*\\(",
+        "\\$_(GET|post|cookie|files|session|env|phplib|GLOBALS|SERVER)\\s*\\[",
+        "\\\\think\\\\",
+        "pboot:if\\s*\\(|/pboot:if\\}" 
     ]
 }

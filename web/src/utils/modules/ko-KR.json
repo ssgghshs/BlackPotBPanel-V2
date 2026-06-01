@@ -1277,6 +1277,7 @@
   "slideVerification":"슬라이드 인증",
   "staticSite":"정적 사이트",
   "reverseProxy":"역 프록시",
+  "phpSite":"PHP 사이트",
   "siteName":"사이트 이름",
   "vulnerabilityProtection":"취약점 보호",
   "siteDetail":"사이트 상세 정보",
@@ -1377,11 +1378,14 @@
   "createSite":"사이트를 생성",
   "indexContent":"인덱스 내용",
   "enterSiteName":"사이트 이름을 입력하세요",
-  "indexContentPlaceholder":"정적 사이트만 유효한자 정의 인덱스 내용을 입력하세요",
+  "indexContentPlaceholder":"정적 사이트 및 PHP 사이트에만 유효한 사용자 정의 인덱스 내용을 입력하세요",
   "enterUpstreamServer":"업스트리밍 서버를 입력하세요",
+  "phpFpmHost":"PHP-FPM 호스트",
+  "enterPhpFpmHost":"PHP-FPM 호스트를 입력하세요 (기본값: 127.0.0.1:9000)",
   "invalidUpstreamServer":"유효하지 않은 업스트리밍 서버입니다 (역 프록시만 적용)",
   "fillRequiredFields":"필수 항목을 입력하세요",
   "editUpstreamServer":"업스트리밍 서버를 수정하세요",
+  "editPhpFpmHost":"PHP-FPM 호스트 수정",
   "fillUpstreamServer":"업스트리밍 서버를 입력하세요",
   "ldapUpload":"LDAP업로드",
   "intelligencePlatform":"정보의 위험도",
@@ -1686,5 +1690,6 @@
   "scpProgressConnectFailed": "전송 진행 서비스에 연결 실패",
   "scpStartFailed": "전송 시작 실패",
   "pleaseSelectHost": "리모트 호스트를 선택하세요.",
-  "commandDeletedSuccessfully": "명령어 삭제 성공"
+  "commandDeletedSuccessfully": "명령어 삭제 성공",
+  "commandNameRequired": "명령어 이름을 입력하세요"
 }   

@@ -29,7 +29,7 @@
       </template>
       <template #type="{ record }">
         <a-tag :color="getTypeColor(record.type)">
-          {{ record.type === 'Static Site' ? t('staticSite') : t('reverseProxy') }}
+          {{ record.type === 'Static Site' ? t('staticSite') : (record.type === 'PHP Site' ? t('phpSite') : t('reverseProxy')) }}
         </a-tag>
       </template>
       <template #waf_mode="{ record }">
@@ -104,6 +104,7 @@
           <a-form-item :label="t('type')" required>
             <a-radio-group v-model="createForm.site_type" type="button">
               <a-radio value="Static Site">{{ t('staticSite') }}</a-radio>
+              <a-radio value="PHP Site">{{ t('phpSite') }}</a-radio>
               <a-radio value="Reverse Proxy">{{ t('reverseProxy') }}</a-radio>
             </a-radio-group>
           </a-form-item>
@@ -116,6 +117,9 @@
           <a-form-item v-if="createForm.site_type === 'Reverse Proxy'" :label="t('upstreamServer')" field="upstream_server" :rules="upstreamRules">
             <a-input v-model="createForm.upstream_server" :placeholder="t('enterUpstreamServer')" />
           </a-form-item>
+          <a-form-item v-if="createForm.site_type === 'PHP Site'" :label="t('phpFpmHost')" field="php_fpm_host">
+            <a-input v-model="createForm.php_fpm_host" :placeholder="t('enterPhpFpmHost')" />
+          </a-form-item>
           <a-form-item :label="t('ssl')">
             <a-switch v-model="createForm.is_ssl" />
           </a-form-item>
@@ -126,7 +130,7 @@
               </a-option>
             </a-select>
           </a-form-item>
-          <a-form-item v-if="createForm.site_type === 'Static Site'" :label="t('indexContent')">
+          <a-form-item v-if="createForm.site_type === 'Static Site' || createForm.site_type === 'PHP Site'" :label="t('indexContent')">
             <a-textarea v-model="createForm.index_content" :placeholder="t('indexContentPlaceholder')" :rows="6" />
           </a-form-item>
           <div class="drawer-footer">
@@ -180,6 +184,7 @@ const createForm = ref({
   domain: '',
   port: '',
   upstream_server: '',
+  php_fpm_host: '',
   is_ssl: false,
   ssl_cert_name: '',
   index_content: ''
@@ -415,7 +420,7 @@ const handleCancel = () => {
 // 处理删除站点
 const handleDeleteSite = (record) => {
   confirmModalTitle.value = t.value('confirmDelete');
-  confirmModalContent.value = `${t.value('confirmDeleteSite')}: ${record.name} (${record.type === 'Static Site' ? t.value('staticSite') : t.value('reverseProxy')})`;
+  confirmModalContent.value = `${t.value('confirmDeleteSite')}: ${record.name} (${record.type === 'Static Site' ? t.value('staticSite') : (record.type === 'PHP Site' ? t.value('phpSite') : t.value('reverseProxy'))})`;
   pendingUpdate.value = {
     type: 'delete',
     record: record
@@ -431,6 +436,7 @@ const openCreateModal = async () => {
     domain: '',
     port: '',
     upstream_server: '',
+    php_fpm_host: '',
     is_ssl: false,
     ssl_cert_name: '',
     index_content: ''
@@ -446,7 +452,7 @@ const openCreateModal = async () => {
 
 // 处理创建站点
 const handleCreateSite = async () => {
-  const { site_name, site_type, domain, port, upstream_server, is_ssl, ssl_cert_name } = createForm.value;
+  const { site_name, site_type, domain, port, upstream_server, php_fpm_host, is_ssl, ssl_cert_name } = createForm.value;
 
   if (!site_name || !domain || !port) {
     Message.warning(t.value('fillRequiredFields'));
@@ -480,6 +486,7 @@ const handleCreateSite = async () => {
       domain: createForm.value.domain,
       port: createForm.value.port,
       upstream_server: upstream_server || '',
+      php_fpm_host: php_fpm_host || '',
       is_ssl,
       ssl_cert_name: is_ssl ? ssl_cert_name : '',
       index_content: createForm.value.index_content || ''
@@ -515,7 +522,9 @@ watch(logDrawerVisible, (newVal, oldVal) => {
 
 // 获取类型标签颜色
 const getTypeColor = (type) => {
-  return type === 'Static Site' ? 'blue' : 'purple';
+  if (type === 'Static Site') return 'blue';
+  if (type === 'PHP Site') return 'arcoblue';
+  return 'purple';
 };
 
 // 组件挂载时获取数据

@@ -1275,6 +1275,7 @@
   "slideVerification":"滑动验证",
   "staticSite":"静态站点",
   "reverseProxy":"反向代理",
+  "phpSite":"PHP站点",
   "siteName":"站点名称",
   "vulnerabilityProtection":"漏洞防护",
   "siteDetail":"站点详情",
@@ -1364,11 +1365,14 @@
   "createSite":"创建网站",
   "indexContent":"索引内容",
   "enterSiteName":"请输入网站名称",
-  "indexContentPlaceholder":"请输入自定义索引内容（仅对静态网站有效）",
+  "indexContentPlaceholder":"请输入自定义索引内容（仅对静态网站和PHP站点有效）",
   "enterUpstreamServer":"请输入上游服务器（仅对反向代理有效）",
+  "phpFpmHost":"PHP-FPM 地址",
+  "enterPhpFpmHost":"请输入 PHP-FPM 地址（默认 127.0.0.1:9000）",
   "invalidUpstreamServer":"无效的上游服务器，必须以http://或https://开头",
   "fillRequiredFields":"请填写必填项",
   "editUpstreamServer":"编辑上游服务器",
+  "editPhpFpmHost":"编辑 PHP-FPM 地址",
   "fillUpstreamServer":"请填写上游服务器",
   "ldapUpload":"LDAP上传",
   "intelligencePlatform":"情报威胁",
@@ -1675,5 +1679,6 @@
   "scpProgressConnectFailed": "连接传输进度服务失败",
   "scpStartFailed": "启动传输任务失败",
   "pleaseSelectHost": "请先选择远程主机",
-  "commandDeletedSuccessfully": "命令删除成功"
+  "commandDeletedSuccessfully": "命令删除成功",
+  "commandNameRequired": "请输入命令名称"
 }

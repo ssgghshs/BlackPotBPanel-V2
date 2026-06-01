@@ -244,7 +244,7 @@ class WAFSiteInfo(BaseModel):
     """WAF Site Info Model"""
     name: str = Field(..., description="Site name (internal slug)")
     display_name: str = Field(..., description="Site display name (original name input by user)")
-    type: str = Field(..., description="Site type: Static Site/Reverse Proxy")
+    type: str = Field(..., description="Site type: Static Site / Reverse Proxy / PHP Site")
     waf_mode: str = Field(..., description="WAF mode: block=block, record=record, Maintenance=maintenance")
     domain: str = Field(..., description="Domain")
     port: str = Field(..., description="Port")
@@ -254,6 +254,7 @@ class WAFSiteInfo(BaseModel):
     cc_status: str = Field(..., description="CC protection status: Enabled/Disabled")
     protection_status: Dict[str, str] = Field(..., description="Detailed protection status")
     upstream_server: str = Field(..., description="Upstream server (for reverse proxy) or static file root path (for static site)")
+    php_fpm_host: Optional[str] = Field(None, description="PHP-FPM host (for PHP Site)")
     today_requests: int = Field(..., description="Today's requests")
     today_blocks: int = Field(..., description="Today's blocks")
 
@@ -277,6 +278,7 @@ class WAFSiteUpdateRequest(BaseModel):
     port: Optional[str] = Field(None, description="Port")
     cc_enabled: Optional[int] = Field(None, description="CC protection enabled: 1=enabled, 0=disabled")
     upstream_server: Optional[str] = Field(None, description="Upstream server (for reverse proxy only)")
+    php_fpm_host: Optional[str] = Field(None, description="PHP-FPM host (for PHP Site only)")
 
 
 class WAFSiteListResponse(BaseModel):
@@ -430,21 +432,23 @@ class WAFSiteDeleteResponse(BaseModel):
 class WAFSiteCreateRequest(BaseModel):
     """WAF站点创建请求模型"""
     site_name: str = Field(..., description="站点名称，用于标识站点")
-    site_type: str = Field(..., description="站点类型: Static Site / Reverse Proxy")
+    site_type: str = Field(..., description="站点类型: Static Site / Reverse Proxy / PHP Site")
     domain: str = Field(..., description="域名")
     port: str = Field(..., description="端口")
     upstream_server: Optional[str] = Field(None, description="上游服务器地址（仅反向代理站点需要）")
+    php_fpm_host: Optional[str] = Field(None, description="PHP-FPM 地址（仅PHP站点需要，默认 php-fpm:9000）")
     is_ssl: bool = Field(False, description="是否启用SSL")
     ssl_cert_name: Optional[str] = Field(None, description="SSL证书名称（启用SSL时必填）")
-    index_content: Optional[str] = Field(None, description="自定义index.html内容（仅静态站点，不传则使用默认模板）")
+    index_content: Optional[str] = Field(None, description="自定义index.html/index.php内容（仅静态/PHP站点，不传则使用默认模板）")
 
 
 class WAFSiteCreateResponse(BaseModel):
     """WAF站点创建响应模型"""
     site_name: str = Field(..., description="站点名称")
-    site_type: str = Field(..., description="站点类型: Static Site / Reverse Proxy")
+    site_type: str = Field(..., description="站点类型: Static Site / Reverse Proxy / PHP Site")
     domain: str = Field(..., description="域名")
     port: str = Field(..., description="端口")
+    php_fpm_host: Optional[str] = Field(None, description="PHP-FPM地址")
     message: str = Field(..., description="响应消息")
 
 

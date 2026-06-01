@@ -590,6 +590,7 @@ async def update_site(
     - port: 端口
     - cc_enabled: CC防护开关: 1=开启, 0=关闭
     - upstream_server: 上游服务器（仅限反向代理站点）
+    - php_fpm_host: PHP-FPM地址（仅限PHP站点）
     """
     # 转换更新数据为字典
     update_dict = update_data.dict(exclude_unset=True)
@@ -684,12 +685,14 @@ async def create_site(
     根据站点类型创建对应的配置文件和相关目录：
     - 静态站点：创建 conf + www目录(含默认index.html) + 日志目录
     - 反向代理站点：创建 conf + 日志目录
+    - PHP站点：创建 conf + www目录(含默认index.php) + 日志目录
 
     - site_name: 站点名称，用于标识站点
-    - site_type: 站点类型: Static Site / Reverse Proxy
+    - site_type: 站点类型: Static Site / Reverse Proxy / PHP Site
     - domain: 域名
     - port: 端口
     - upstream_server: 上游服务器地址（仅反向代理站点需要）
+    - php_fpm_host: PHP-FPM地址（仅PHP站点需要，默认php-fpm:9000）
     """
     return await WAFSiteService.create_site(
         site_name=site_data.site_name,
@@ -697,6 +700,7 @@ async def create_site(
         domain=site_data.domain,
         port=site_data.port,
         upstream_server=site_data.upstream_server or "",
+        php_fpm_host=site_data.php_fpm_host or "",
         is_ssl=site_data.is_ssl,
         ssl_cert_name=site_data.ssl_cert_name or "",
         index_content=site_data.index_content or ""

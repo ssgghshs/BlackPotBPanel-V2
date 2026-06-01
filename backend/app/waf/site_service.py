@@ -192,7 +192,12 @@ class WAFSiteService:
                 content = f.read()
             
             # Parse site type
-            site_type = "Static Site" if "root /usr/local/openresty/nginx/html" in content else "Reverse Proxy"
+            if "fastcgi_pass" in content and "index.php" in content:
+                site_type = "PHP Site"
+            elif "root /usr/local/openresty/nginx/html" in content:
+                site_type = "Static Site"
+            else:
+                site_type = "Reverse Proxy"
             
             # Parse domain
             server_name_match = re.search(r'server_name\s+([^;]+);', content)
@@ -247,9 +252,17 @@ class WAFSiteService:
             # Parse upstream server / static root path
             if site_type == "Static Site":
                 upstream_server = os.path.join(settings.WAF_SITE_WWW_PATH, site_name)
+            elif site_type == "PHP Site":
+                upstream_server = os.path.join(settings.WAF_SITE_WWW_PATH, site_name)
             else:
                 upstream_match = re.search(r'proxy_pass\s+([^;]+);', content)
                 upstream_server = upstream_match.group(1).strip() if upstream_match else ""
+
+            # Parse PHP-FPM host
+            php_fpm_host = None
+            if site_type == "PHP Site":
+                fpm_match = re.search(r'fastcgi_pass\s+([^;]+);', content)
+                php_fpm_host = fpm_match.group(1).strip() if fpm_match else "127.0.0.1:9000"
             
             # Count today's requests
             today_requests = WAFSiteService._count_today_requests(site_name)
@@ -272,6 +285,7 @@ class WAFSiteService:
                 "cc_status": cc_status,
                 "protection_status": protection_status,
                 "upstream_server": upstream_server,
+                "php_fpm_host": php_fpm_host,
                 "today_requests": today_requests,
                 "today_blocks": today_blocks
             }
@@ -452,6 +466,9 @@ class WAFSiteService:
 
             if 'upstream_server' in update_data and 'proxy_pass' in content:
                 content = re.sub(r'proxy_pass\s+[^;]+;', f'proxy_pass {update_data["upstream_server"]};', content)
+
+            if 'php_fpm_host' in update_data and 'fastcgi_pass' in content:
+                content = re.sub(r'fastcgi_pass\s+[^;]+;', f'fastcgi_pass {update_data["php_fpm_host"]};', content)
 
             with open(conf_path, 'w', encoding='utf-8', errors='ignore') as f:
                 f.write(content)
@@ -752,23 +769,26 @@ class WAFSiteService:
 
     @staticmethod
     async def create_site(site_name: str, site_type: str, domain: str, port: str,
-                         upstream_server: str = "", is_ssl: bool = False,
+                         upstream_server: str = "", php_fpm_host: str = "",
+                         is_ssl: bool = False,
                          ssl_cert_name: str = "", index_content: str = "") -> dict:
         """创建新站点
 
         根据站点类型创建对应的配置文件和相关目录：
         - 静态站点：创建 conf + www目录(含默认index.html) + 日志目录
         - 反向代理站点：创建 conf + 日志目录
+        - PHP站点：创建 conf + www目录(含默认index.php) + 日志目录
 
         Args:
             site_name: 站点名称（支持中文，自动转拼音作为内部标识）
-            site_type: 站点类型: Static Site / Reverse Proxy
+            site_type: 站点类型: Static Site / Reverse Proxy / PHP Site
             domain: 域名
             port: 端口
             upstream_server: 上游服务器地址（仅反向代理站点需要）
+            php_fpm_host: PHP-FPM 地址（仅PHP站点需要，默认 127.0.0.1:9000）
             is_ssl: 是否启用SSL
             ssl_cert_name: SSL证书名称（启用SSL时必填）
-            index_content: 自定义index.html内容（仅静态站点，不传则使用默认模板）
+            index_content: 自定义index内容（仅静态/PHP站点，不传则使用默认模板）
 
         Returns:
             创建结果
@@ -776,13 +796,13 @@ class WAFSiteService:
         try:
             display_name, site_name = _normalize_site_name(site_name)
 
-            if site_type not in ["Static Site", "Reverse Proxy"]:
+            if site_type not in ["Static Site", "Reverse Proxy", "PHP Site"]:
                 return {
                     "site_name": site_name,
                     "site_type": site_type,
                     "domain": domain,
                     "port": port,
-                    "message": f"Invalid site_type: {site_type}. Must be 'Static Site' or 'Reverse Proxy'"
+                    "message": f"Invalid site_type: {site_type}. Must be 'Static Site', 'Reverse Proxy', or 'PHP Site'"
                 }
 
             if site_type == "Reverse Proxy" and not upstream_server:
@@ -793,6 +813,9 @@ class WAFSiteService:
                     "port": port,
                     "message": "upstream_server is required for Reverse Proxy sites"
                 }
+
+            if site_type == "PHP Site" and not php_fpm_host:
+                php_fpm_host = "127.0.0.1:9000"
 
             if is_ssl and not ssl_cert_name:
                 return {
@@ -887,7 +910,7 @@ class WAFSiteService:
                     f'    }}\n\n'
                     f'}}\n'
                 )
-            else:
+            elif site_type == "Reverse Proxy":
                 ssl_block = ""
                 if is_ssl:
                     ssl_block = (
@@ -931,6 +954,75 @@ class WAFSiteService:
                     f'    }}\n\n'
                     f'}}\n'
                 )
+            else:
+                www_dir = os.path.join(settings.WAF_SITE_WWW_PATH, site_name)
+                os.makedirs(www_dir, exist_ok=True)
+                default_index = os.path.join(www_dir, "index.php")
+                if not os.path.exists(default_index):
+                    php_content = index_content if index_content else (
+                        '<?php\n'
+                        'echo "<!DOCTYPE html>\\n<html>\\n<head>\\n'
+                        f'    <title>{site_name}</title>\\n'
+                        '</head>\\n<body>\\n'
+                        f'    <center><h1>{site_name}</h1></center>\\n'
+                        f'    <center>Welcome to {site_name}</center>\\n'
+                        f'    <hr><center>Blackpotbpanel/2.0</center>\\n'
+                        '</body>\\n</html>\\n";\n'
+                    )
+                    with open(default_index, 'w', encoding='utf-8') as f:
+                        f.write(php_content)
+                    logger.info(f"Created index.php for PHP site {site_name}")
+
+                ssl_block = ""
+                if is_ssl:
+                    ssl_block = (
+                        f'\n    http2 on;\n'
+                        f'    # SSL 配置\n'
+                        f'    ssl_certificate /usr/local/openresty/nginx/ssl/{ssl_cert_name}/{ssl_cert_name}.pem;\n'
+                        f'    ssl_certificate_key /usr/local/openresty/nginx/ssl/{ssl_cert_name}/{ssl_cert_name}.key;\n'
+                        f'    # SSL 优化\n'
+                        f'    ssl_protocols TLSv1.2 TLSv1.3;\n'
+                        f'    ssl_prefer_server_ciphers on;\n'
+                        f'    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;\n'
+                        f'    ssl_session_timeout 1d;\n'
+                        f'    ssl_session_cache shared:SSL:10m;\n'
+                        f'    ssl_session_tickets off;\n'
+                    )
+
+                listen_directive = f"listen {port} ssl;" if is_ssl else f"listen {port};"
+
+                conf_content = (
+                    f'server {{\n'
+                    f'    {listen_directive}\n'
+                    f'    server_name {domain};'
+                    f'{ssl_block}\n\n'
+                    f'{site_name_directive}'
+                    f'{waf_vars_include}'
+                    f'{security_headers}\n'
+                    f'    root /usr/local/openresty/nginx/html/{site_name};\n'
+                    f'    index index.php index.html;\n\n'
+                    f'{log_config}'
+                    f'{waf_lua_config}'
+                    f'    # PHP 解析\n'
+                    f'    location / {{\n'
+                    f'        try_files $uri $uri/ /index.php?$query_string;\n'
+                    f'    }}\n\n'
+                    f'    location ~ \\.php$ {{\n'
+                    f'        fastcgi_pass {php_fpm_host};\n'
+                    f'        fastcgi_index index.php;\n'
+                    f'        include fastcgi_params;\n'
+                    f'        fastcgi_param SCRIPT_FILENAME {settings.WAF_SITE_WWW_PATH}{site_name}$fastcgi_script_name;\n\n'
+                    f'        fastcgi_connect_timeout 30;\n'
+                    f'        fastcgi_send_timeout 60;\n'
+                    f'        fastcgi_read_timeout 60;\n'
+                    f'    }}\n\n'
+                    f'    # 静态文件直接返回\n'
+                    f'    location ~ \\.(gif|jpg|jpeg|png|bmp|swf|css|js|ico|svg|woff|woff2|ttf|eot)$ {{\n'
+                    f'        expires 30d;\n'
+                    f'        access_log off;\n'
+                    f'    }}\n\n'
+                    f'}}\n'
+                )
 
             os.makedirs(settings.WAF_SITE_CONF_PATH, exist_ok=True)
             with open(conf_path, 'w', encoding='utf-8') as f:
@@ -956,12 +1048,13 @@ class WAFSiteService:
                 }
 
             return {
-                "site_name": site_name,
-                "site_type": site_type,
-                "domain": domain,
-                "port": port,
-                "message": f"Successfully created {site_type} site: {site_name}"
-            }
+                    "site_name": site_name,
+                    "site_type": site_type,
+                    "domain": domain,
+                    "port": port,
+                    "php_fpm_host": php_fpm_host or None,
+                    "message": f"Successfully created {site_type} site: {site_name}"
+                }
 
         except Exception as e:
             logger.error(f"创建站点失败: {str(e)}")
@@ -980,6 +1073,7 @@ class WAFSiteService:
         根据站点类型执行不同的清理操作：
         - 静态站点：删除配置文件 + www目录 + 日志目录
         - 反向代理站点：删除配置文件 + 日志目录
+        - PHP站点：删除配置文件 + www目录 + 日志目录
 
         Args:
             site_name: 站点名称
@@ -1010,11 +1104,11 @@ class WAFSiteService:
                 os.remove(config_path)
                 logger.info(f"Deleted site JSON config: {config_path}")
 
-            if site_type == "Static Site":
+            if site_type in ("Static Site", "PHP Site"):
                 www_path = os.path.join(settings.WAF_SITE_WWW_PATH, site_name)
                 if os.path.exists(www_path):
                     shutil.rmtree(www_path)
-                    logger.info(f"Deleted static site www directory: {www_path}")
+                    logger.info(f"Deleted {site_type} www directory: {www_path}")
 
             log_dir = os.path.join(settings.WAF_SITE_LOG_PATH, site_name)
             if os.path.exists(log_dir):

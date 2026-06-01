@@ -1292,6 +1292,7 @@
   "slideVerification":"滑動驗證",
   "staticSite":"靜的網站",
   "reverseProxy":"逆代理",
+  "phpSite":"PHP站點",
   "siteName":"網站名稱",
   "vulnerabilityProtection":"脆弱性保護",
   "siteDetail":"網站詳情",
@@ -1392,11 +1393,14 @@
   "createSite":"創建網站",
   "indexContent":"索引內容",
   "enterSiteName":"請輸入網站名稱",
-  "indexContentPlaceholder":"請輸入自定義索引內容（僅對靜態網站有效）",
+  "indexContentPlaceholder":"請輸入自定義索引內容（僅對靜態網站和PHP站點有效）",
   "enterUpstreamServer":"請輸入上游伺服器",
+  "phpFpmHost":"PHP-FPM 地址",
+  "enterPhpFpmHost":"請輸入 PHP-FPM 地址（默認 127.0.0.1:9000）",
   "invalidUpstreamServer":"無效的上游伺服器（僅對逆代理有效）",
   "fillRequiredFields":"請填寫必填項",
   "editUpstreamServer":"編輯上游伺服器",
+  "editPhpFpmHost":"編輯 PHP-FPM 地址",
   "fillUpstreamServer":"請填寫上游伺服器",
   "ldapUpload":"LDAP上傳",
   "intelligencePlatform":"情报威脅",
@@ -1698,5 +1702,6 @@
   "scpProgressConnectFailed": "連接傳輸進度服務失敗",
   "scpStartFailed": "文件傳輸開始失敗",
   "pleaseSelectHost": "請先選擇远程主機",
-  "commandDeletedSuccessfully": "命令刪除成功"
+  "commandDeletedSuccessfully": "命令刪除成功",
+  "commandNameRequired": "輸入命令名稱"
 }  
