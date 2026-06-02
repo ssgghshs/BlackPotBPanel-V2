@@ -1,6 +1,6 @@
 ![favicon](images/favicon.ico)
 # BlackPotBPanel V2
-BlackPotBPanel 是一款使用AI仿照BT面板基于vue+fastapi开发的linux管理面板，写的比较垃圾，只实现了一些基本功能，后续可能会继续完善。
+BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面板，写的比较垃圾，只实现了一些基本功能，后续可能会继续完善。
 
 ## 演示环境
 (https://demo.panel.blackpotbp.cc)
@@ -115,33 +115,44 @@ systemctl start Blackpotbpanel
 ```
 
 
-## 功能
-- 简洁易用的可视化操作界面
-- 登录功能
+## 界面展示
+### 登录功能
 ![登录界面](images/login.png)
-- 首页功能
+### 首页功能
 ![首页功能](images/home.png)
-- 容器管理，仅支持docker
+### 容器管理，仅支持docker
 ![容器管理](images/docker.png)
-- 终端功能
+![容器列表](images/containers.png)
+![镜像列表](images/images.png)
+![网络列表](images/networks.png)
+![卷列表](images/volumes.png)
+![compose列表](images/compose.png)
+![容器宿主机列表](images/containerHost.png)
+### 终端功能
 ![终端功能](images/cmd.png)
-- 定时任务
+### 主机管理
+![主机管理](images/host.png)
+### 文件传输
+![文件传输](images/fileTransfer.png)
+### 定时任务
 ![定时任务](images/crontab.png)
-- 脚本库
+### 脚本库
 ![脚本库](images/script.png)
-- 文件管理
+### 文件管理
 ![文件管理](images/file.png)
-- 数据库管理
+### 数据库管理
 ![mysql管理](images/mysql.png)
+![postgresql管理](images/pgsql.png)
 ![sqlite管理](images/sqlite.png)
-- 系统服务
+### 防火墙管理
 ![防火墙管理](images/firewall.png)
-![系统服务](images/service.png)
-- WAF管理
+### SSH服务
+![SSH服务](images/service.png)
+### WAF管理(Beta版本)
 ![WAF管理](images/waf.png)
-- 日志管理
+### 日志管理
 ![日志管理](images/log.png)
-- 系统设置
+### 系统设置
 ![系统设置](images/setting.png)
 
 ## 待完善功能
