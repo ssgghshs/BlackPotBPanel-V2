@@ -380,8 +380,8 @@ async def get_all_settings() -> dict:
             "message": "success"
         }
     except Exception as e:
-        logger.error(f"获取系统设置失败: {e}")
-        raise Exception(f"获取系统设置失败: {str(e)}")
+        logger.error(f"Failed to get all system settings: {e}")
+        raise Exception(f"Failed to get all system settings: {str(e)}")
 
 
 # ---------- DNS ----------
@@ -404,7 +404,7 @@ def set_dns_config(dns1: str, dns2: Optional[str] = None) -> dict:
     if dns2:
         content += f"nameserver {dns2}\n"
     _write_file('/etc/resolv.conf', content)
-    return {"status": True, "message": "DNS设置成功"}
+    return {"status": True, "message": "DNS settings updated successfully"}
 
 
 def test_dns(dns1: str, dns2: Optional[str] = None) -> dict:
@@ -420,9 +420,9 @@ def test_dns(dns1: str, dns2: Optional[str] = None) -> dict:
             content += f"nameserver {dns2}\n"
         _write_file('/etc/resolv.conf', content)
         socket.gethostbyname('www.qq.com')
-        return {"status": True, "message": "当前DNS可用"}
+        return {"status": True, "message": "Current DNS is available"}
     except socket.error:
-        return {"status": False, "message": "当前DNS不可用"}
+        return {"status": False, "message": "Current DNS is not available"}
     finally:
         _write_file('/etc/resolv.conf', backup)
 
@@ -475,7 +475,7 @@ def set_swap(size: int) -> dict:
 
     info = get_swap_info()
     info["status"] = True
-    info["message"] = "Swap设置成功"
+    info["message"] = "Swap settings updated successfully"
     return info
 
 
@@ -519,7 +519,7 @@ def set_timezone(area: str, zone: str) -> dict:
     os.symlink(target, '/etc/localtime')
     if os.path.exists('/etc/timezone'):
         _write_file('/etc/timezone', f'{area}/{zone}\n')
-    return {"status": True, "message": "时区设置成功"}
+    return {"status": True, "message": "Timezone updated successfully"}
 
 
 def sync_time() -> dict:
@@ -530,7 +530,7 @@ def sync_time() -> dict:
         response = c.request('pool.ntp.org', version=3, timeout=5)
         date_str = datetime.fromtimestamp(response.tx_time).strftime("%Y-%m-%d %H:%M:%S")
         _run_cmd(f'date -s "{date_str}"')
-        return {"status": True, "message": "时间同步成功"}
+        return {"status": True, "message": "Time synchronized successfully"}
     except ImportError:
         pass
     except Exception as e:
@@ -539,7 +539,7 @@ def sync_time() -> dict:
     # 方法2: ntpdate 命令
     try:
         _run_cmd('ntpdate -u pool.ntp.org')
-        return {"status": True, "message": "时间同步成功"}
+        return {"status": True, "message": "Time synchronized successfully"}
     except Exception as e:
         logger.warning(f"ntpdate命令同步失败: {e}")
 
@@ -548,7 +548,7 @@ def sync_time() -> dict:
         _run_cmd('timedatectl set-ntp true')
         _run_cmd('sleep 3')
         _run_cmd('timedatectl set-ntp false')
-        return {"status": True, "message": "时间同步成功"}
+        return {"status": True, "message": "Time synchronized successfully"}
     except Exception as e:
         logger.warning(f"timedatectl同步失败: {e}")
 
@@ -559,7 +559,7 @@ def sync_time() -> dict:
         ts = resp.read().decode().strip()
         date_str = datetime.fromtimestamp(int(float(ts))).strftime("%Y-%m-%d %H:%M:%S")
         _run_cmd(f'date -s "{date_str}"')
-        return {"status": True, "message": "时间同步成功"}
+        return {"status": True, "message": "Time synchronized successfully"}
     except Exception as e:
         logger.error(f"所有时间同步方式均失败: {e}")
         raise Exception(f"时间同步失败，请检查网络连接")
@@ -569,11 +569,11 @@ def sync_time() -> dict:
 
 def set_password(user: str, password: str, confirm_password: str) -> dict:
     if not user:
-        raise Exception("用户名不能为空")
+        raise Exception("Username cannot be empty")
     if " " in password:
-        raise Exception("密码不能包含空格")
+        raise Exception("Password cannot contain spaces")
     if password != confirm_password:
-        raise Exception("两次输入的密码不一致")
+        raise Exception("Passwords do not match")
     try:
         result = subprocess.run(
             ['passwd', user],
@@ -582,9 +582,9 @@ def set_password(user: str, password: str, confirm_password: str) -> dict:
             capture_output=True,
             check=True
         )
-        return {"status": True, "message": "密码修改成功"}
+        return {"status": True, "message": "Password modified successfully"}
     except subprocess.CalledProcessError as e:
-        raise Exception(f"密码修改失败: {e.stderr}")
+        raise Exception(f"Password modified failed: {e.stderr}")
 
 
 # ---------- 内存盘 ----------
@@ -610,9 +610,9 @@ def create_memory_disk(path: str, size: int) -> dict:
     conf = _read_file('/proc/meminfo')
     mem_total = int(re.search(r"MemTotal:\s*(\d+) kB", conf).group(1))
     if size * 1024 > mem_total / 2:
-        raise Exception("内存盘最大容量不能超过物理内存的50%")
+        raise Exception("Memory disk size cannot exceed 50% of physical memory size")
     if not path.startswith('/'):
-        raise Exception("请输入绝对路径")
+        raise Exception("Please input absolute path")
 
     if path == '/tmp':
         os.makedirs('/tmp_backup', exist_ok=True)
@@ -623,7 +623,7 @@ def create_memory_disk(path: str, size: int) -> dict:
             raise Exception("该目录已存在文件，请更换目录")
 
     _mount_tmpfs(path, size)
-    return {"status": True, "message": "内存盘创建成功"}
+    return {"status": True, "message": "Memory disk created successfully"}
 
 
 def delete_memory_disk(path: str) -> dict:
@@ -645,8 +645,8 @@ def delete_memory_disk(path: str) -> dict:
         if path == '/tmp':
             _run_cmd(r'\cp -a -r /tmp_backup/* /tmp/')
             shutil.rmtree('/tmp_backup', ignore_errors=True)
-        return {"status": True, "message": "卸载成功，部分目录可能需要重启服务器才能生效"}
-    return {"status": False, "message": "卸载失败"}
+        return {"status": True, "message": "Unmounted successfully"}
+    return {"status": False, "message": "Unmount failed"}
 
 
 def _mount_tmpfs(mount_path: str, mount_size: int):
@@ -703,7 +703,7 @@ def get_hosts_list() -> dict:
 
 def add_hosts(domain: str, ip: str) -> dict:
     if not _check_ip(ip):
-        raise Exception("IP地址格式不正确")
+        raise Exception("IP address format is incorrect")
     lines = _read_file('/etc/hosts').splitlines(keepends=True)
     found = False
     for i, line in enumerate(lines):
@@ -715,7 +715,7 @@ def add_hosts(domain: str, ip: str) -> dict:
         lines.append(f"{ip}\t{domain}\n")
     _write_file('/etc/hosts', ''.join(lines))
     _run_cmd('systemctl restart NetworkManager.service 2>/dev/null || true')
-    return {"status": True, "message": "Hosts添加成功"}
+    return {"status": True, "message": "Hosts added successfully"}
 
 
 def delete_hosts(domain: str) -> dict:
@@ -723,7 +723,7 @@ def delete_hosts(domain: str) -> dict:
     new_lines = [l for l in lines if domain not in l]
     _write_file('/etc/hosts', ''.join(new_lines))
     _run_cmd('systemctl restart NetworkManager.service 2>/dev/null || true')
-    return {"status": True, "message": "Hosts删除成功"}
+    return {"status": True, "message": "Hosts deleted successfully"}
 
 
 def toggle_hosts(domain: str, act: str) -> dict:
@@ -736,7 +736,7 @@ def toggle_hosts(domain: str, act: str) -> dict:
                 lines[i] = line.lstrip('#')
     _write_file('/etc/hosts', ''.join(lines))
     _run_cmd('systemctl restart NetworkManager.service 2>/dev/null || true')
-    msg = "暂停成功" if act == 'pause' else "启用成功"
+    msg = "Hosts paused successfully" if act == 'pause' else "Hosts resumed successfully"
     return {"status": True, "message": msg}
 
 
@@ -760,7 +760,7 @@ def _run_cmd(cmd: str) -> str:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
         return result.stdout.strip()
     except Exception as e:
-        logger.error(f"命令执行失败: {cmd}, 错误: {e}")
+        logger.error(f"Command execution failed: {cmd}, Error: {e}")
         return ''
 
 
