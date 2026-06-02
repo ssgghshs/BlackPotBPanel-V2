@@ -4,6 +4,7 @@ BlackPotBPanel 是一款使用AI仿照BT面板基于vue+fastapi开发的linux管
 
 ## 演示环境
 (https://demo.panel.blackpotbp.cc)
+
 账号：admin
 密码：admin@123
 
