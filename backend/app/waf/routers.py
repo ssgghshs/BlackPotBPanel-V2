@@ -188,6 +188,53 @@ async def delete_ssl_cert(
         )
 
 
+@router.post("/ssl-certs/self-signed/generate", response_model=schemas.SelfSignedCertGenerateResponse, summary="生成自签SSL证书")
+async def generate_self_signed_cert(
+    cert_data: schemas.SelfSignedCertGenerateRequest,
+    current_user = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_waf_db)
+):
+    """生成自签SSL证书
+
+    使用 cryptography 库生成自签名的 RSA SSL 证书，
+    自动保存到证书目录并创建数据库记录。
+
+    - name: 证书名称
+    - domain: 证书域名
+    - key_size: RSA密钥长度 (2048/4096，默认2048)
+    - days_valid: 有效期（天，默认365）
+    - organization: 组织名称
+    - signature_algorithm: 签名算法 (SHA256/SHA384/SHA512，默认SHA256)
+    """
+    try:
+        cert, key_pem, cert_pem = await service.generate_self_signed_cert(
+            db=db,
+            name=cert_data.name,
+            domain=cert_data.domain,
+            days_valid=cert_data.days_valid,
+            key_size=cert_data.key_size,
+            organization=cert_data.organization,
+            signature_algorithm=cert_data.signature_algorithm
+        )
+
+        return schemas.SelfSignedCertGenerateResponse(
+            id=cert.id,
+            name=cert.name,
+            domain=cert.domain or cert_data.domain,
+            key=key_pem,
+            pem=cert_pem,
+            message="success generate self-signed cert"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成自签SSL证书失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"generate self-signed cert failed: {str(e)}"
+        )
+
+
 @router.get("/waf/status", response_model=schemas.WAFContainerStatus, summary="获取WAF容器状态")
 async def get_waf_container_status(
     current_user = Depends(get_current_active_user)

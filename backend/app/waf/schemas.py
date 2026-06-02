@@ -577,3 +577,23 @@ class ThreatIntelIPAnalysisResponse(BaseModel):
     ip: str = Field(..., description="分析的IP地址")
     data: Optional[dict] = Field(None, description="IP分析数据")
     message: str = Field(..., description="分析结果消息")
+
+
+class SelfSignedCertGenerateRequest(BaseModel):
+    """自签证书生成请求模型"""
+    name: str = Field(..., description="证书名称")
+    domain: str = Field(..., description="证书域名 (Common Name & SAN)")
+    key_size: int = Field(2048, description="RSA 密钥长度: 2048 或 4096")
+    days_valid: int = Field(365, description="证书有效期（天）")
+    organization: str = Field("Self-Signed", description="组织名称 (O)")
+    signature_algorithm: str = Field("SHA256", description="签名算法: SHA256, SHA384, SHA512")
+
+
+class SelfSignedCertGenerateResponse(BaseModel):
+    """自签证书生成响应模型"""
+    id: int = Field(..., description="证书ID")
+    name: str = Field(..., description="证书名称")
+    domain: str = Field(..., description="证书域名")
+    key: str = Field(..., description="私钥内容")
+    pem: str = Field(..., description="证书内容")
+    message: str = Field(..., description="响应消息")

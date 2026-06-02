@@ -1,5 +1,76 @@
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, List
+
+
+class DNSConfig(BaseModel):
+    dns1: str
+    dns2: Optional[str] = None
+
+
+class SwapInfo(BaseModel):
+    total: int
+    used: int
+    free: int
+    size: int
+
+
+class SwapSetRequest(BaseModel):
+    size: int
+
+
+class TimezoneZone(BaseModel):
+    area: str
+    zones: List[str]
+
+
+class TimezoneSetRequest(BaseModel):
+    area: str
+    zone: str
+
+
+class PasswordSetRequest(BaseModel):
+    user: str
+    password: str
+    confirm_password: str
+
+
+class MemoryDiskCreate(BaseModel):
+    path: str
+    size: int
+
+
+class MemoryDiskDelete(BaseModel):
+    path: str
+
+
+class HostsEntry(BaseModel):
+    domain: str
+    ip: str
+    status: int
+
+
+class HostsCreateRequest(BaseModel):
+    domain: str
+    ip: str
+
+
+class HostsDeleteRequest(BaseModel):
+    domain: str
+
+
+class HostsToggleRequest(BaseModel):
+    domain: str
+    act: str
+
+
+class SystemSettingsResponse(BaseModel):
+    """所有系统设置合并响应"""
+    dns: DNSConfig
+    swap: SwapInfo
+    timezone: dict
+    hosts: Dict[str, HostsEntry]
+    memory_disk: dict
+    message: str
 
 class EnvConfigBase(BaseModel):
     """环境配置基础模型"""
@@ -20,6 +91,7 @@ class EnvConfigBase(BaseModel):
     SSL_ENABLED: Optional[bool] = None
     LOGIN_LIMIT: Optional[bool] = None
     SECURITY_ENTRANCE: Optional[str] = None
+    DOMAIN_BINDING: Optional[str] = None
 
 class EnvConfigCreate(EnvConfigBase):
     """创建环境配置模型"""

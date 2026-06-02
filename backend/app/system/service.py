@@ -1,9 +1,14 @@
 import os
 import sys
+import re
+import json
 import asyncio
 import logging
 import subprocess
-from typing import Dict, Optional
+import socket
+import shutil
+from typing import Dict, Optional, List, Tuple
+from datetime import datetime
 from app.system import schemas
 
 logger = logging.getLogger(__name__)
@@ -16,7 +21,7 @@ ADMIN_CONFIG_FIELDS = [
     'DATABASE_URL', 'APP_NAME', 'VERSION', 'DEBUG', 'SECRET_KEY', 
     'ALGORITHM', 'ACCESS_TOKEN_EXPIRE_MINUTES', 'TIMEZONE', 'ENABLE_DOCS',
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
-    'LOGIN_LIMIT', 'SECURITY_ENTRANCE',
+    'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING',
 ]
 USER_CONFIG_FIELDS = ['APP_NAME', 'VERSION', 'TIMEZONE', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
 
@@ -25,7 +30,7 @@ ADMIN_CONFIG_EDITABLE = [
     'DATABASE_URL', 'APP_NAME', 'DEBUG', 'SECRET_KEY', 
     'ALGORITHM', 'ACCESS_TOKEN_EXPIRE_MINUTES', 'TIMEZONE', 'ENABLE_DOCS',
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
-    'LOGIN_LIMIT', 'SECURITY_ENTRANCE',
+    'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING',
 ]
 USER_CONFIG_EDITABLE = ['APP_NAME', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
 
@@ -353,3 +358,433 @@ async def update_ssl_cert_content(cert_content: Optional[str] = None, key_conten
     except Exception as e:
         logger.error(f"更新SSL证书内容失败: {e}")
         raise Exception(f"更新SSL证书内容失败: {str(e)}")
+
+
+# ==================== 系统设置功能 ====================
+
+async def get_all_settings() -> dict:
+    """获取所有系统设置（合并接口）"""
+    try:
+        dns_config = get_dns_config()
+        swap_info = get_swap_info()
+        tz_info = get_timezone_info()
+        hosts_data = get_hosts_list()
+        mem_disk = get_memory_disk_info()
+
+        return {
+            "dns": dns_config,
+            "swap": swap_info,
+            "timezone": tz_info,
+            "hosts": hosts_data,
+            "memory_disk": mem_disk,
+            "message": "success"
+        }
+    except Exception as e:
+        logger.error(f"获取系统设置失败: {e}")
+        raise Exception(f"获取系统设置失败: {str(e)}")
+
+
+# ---------- DNS ----------
+
+def get_dns_config() -> dict:
+    dns_str = _read_file('/etc/resolv.conf')
+    matches = re.findall(r"nameserver\s+(.+)", dns_str)
+    return {
+        "dns1": matches[0] if len(matches) > 0 else '',
+        "dns2": matches[1] if len(matches) > 1 else ''
+    }
+
+
+def set_dns_config(dns1: str, dns2: Optional[str] = None) -> dict:
+    if not _check_ip(dns1):
+        raise Exception("主要DNS地址无效")
+    if dns2 and not _check_ip(dns2):
+        raise Exception("备用DNS地址无效")
+    content = f"nameserver {dns1}\n"
+    if dns2:
+        content += f"nameserver {dns2}\n"
+    _write_file('/etc/resolv.conf', content)
+    return {"status": True, "message": "DNS设置成功"}
+
+
+def test_dns(dns1: str, dns2: Optional[str] = None) -> dict:
+    if not _check_ip(dns1):
+        raise Exception("主要DNS地址无效")
+    if dns2 and not _check_ip(dns2):
+        raise Exception("备用DNS地址无效")
+
+    backup = _read_file('/etc/resolv.conf')
+    try:
+        content = f"nameserver {dns1}\n"
+        if dns2:
+            content += f"nameserver {dns2}\n"
+        _write_file('/etc/resolv.conf', content)
+        socket.gethostbyname('www.qq.com')
+        return {"status": True, "message": "当前DNS可用"}
+    except socket.error:
+        return {"status": False, "message": "当前DNS不可用"}
+    finally:
+        _write_file('/etc/resolv.conf', backup)
+
+
+def _check_ip(ip: str) -> bool:
+    try:
+        socket.inet_pton(socket.AF_INET, ip)
+        return True
+    except socket.error:
+        pass
+    try:
+        socket.inet_pton(socket.AF_INET6, ip)
+        return True
+    except socket.error:
+        pass
+    return False
+
+
+# ---------- Swap ----------
+
+def get_swap_info() -> dict:
+    swap_info = {"total": 0, "used": 0, "free": 0, "size": 0}
+    conf = _read_file('/proc/meminfo')
+    total_match = re.search(r"SwapTotal:\s*(\d+) kB", conf)
+    free_match = re.search(r"SwapFree:\s*(\d+) kB", conf)
+    if total_match:
+        swap_info["total"] = int(total_match.group(1)) // 1024
+    if free_match:
+        swap_info["free"] = int(free_match.group(1)) // 1024
+    swap_info["used"] = swap_info["total"] - swap_info["free"]
+    swap_file = '/www/swap'
+    if os.path.exists(swap_file):
+        swap_info["size"] = os.path.getsize(swap_file)
+    return swap_info
+
+
+def set_swap(size: int) -> dict:
+    swap_file = '/www/swap'
+    if os.path.exists(swap_file):
+        _run_cmd(f'swapoff {swap_file}')
+        os.remove(swap_file)
+        escaped = swap_file.replace('/', '\\/')
+        _sed_i(f'/{escaped}/d', '/etc/fstab')
+
+    if size > 0:
+        _run_cmd(f'dd if=/dev/zero of={swap_file} bs=1M count={size}')
+        _run_cmd(f'mkswap -f {swap_file}')
+        _run_cmd(f'swapon {swap_file}')
+        _write_file('/etc/fstab', f'\n{swap_file} swap swap defaults 0 0\n', append=True)
+
+    info = get_swap_info()
+    info["status"] = True
+    info["message"] = "Swap设置成功"
+    return info
+
+
+# ---------- 时区 ----------
+
+def get_timezone_info() -> dict:
+    zone_list = ['Asia', 'Africa', 'America', 'Antarctica', 'Arctic',
+                 'Atlantic', 'Australia', 'Europe', 'Indian', 'Pacific']
+    current_area = 'Asia'
+    current_zone = 'Shanghai'
+
+    if os.path.islink('/etc/localtime'):
+        real = os.readlink('/etc/localtime')
+        parts = real.split('/')
+        if len(parts) >= 2:
+            current_area = parts[-2]
+            current_zone = parts[-1]
+
+    res = []
+    for area in zone_list:
+        area_path = f'/usr/share/zoneinfo/{area}'
+        if os.path.exists(area_path):
+            zones = [z for z in os.listdir(area_path) if os.path.isfile(f'{area_path}/{z}')]
+            zones.sort()
+            res.append({"area": area, "zones": zones})
+
+    return {
+        "current_area": current_area,
+        "current_zone": current_zone,
+        "zone_list": res,
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+def set_timezone(area: str, zone: str) -> dict:
+    target = f'/usr/share/zoneinfo/{area}/{zone}'
+    if not os.path.exists(target):
+        raise Exception("目标时区不存在")
+    if os.path.exists('/etc/localtime'):
+        os.remove('/etc/localtime')
+    os.symlink(target, '/etc/localtime')
+    if os.path.exists('/etc/timezone'):
+        _write_file('/etc/timezone', f'{area}/{zone}\n')
+    return {"status": True, "message": "时区设置成功"}
+
+
+def sync_time() -> dict:
+    # 方法1: ntplib（NTP协议）
+    try:
+        import ntplib
+        c = ntplib.NTPClient()
+        response = c.request('pool.ntp.org', version=3, timeout=5)
+        date_str = datetime.fromtimestamp(response.tx_time).strftime("%Y-%m-%d %H:%M:%S")
+        _run_cmd(f'date -s "{date_str}"')
+        return {"status": True, "message": "时间同步成功"}
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"ntplib同步失败: {e}")
+
+    # 方法2: ntpdate 命令
+    try:
+        _run_cmd('ntpdate -u pool.ntp.org')
+        return {"status": True, "message": "时间同步成功"}
+    except Exception as e:
+        logger.warning(f"ntpdate命令同步失败: {e}")
+
+    # 方法3: timedatectl
+    try:
+        _run_cmd('timedatectl set-ntp true')
+        _run_cmd('sleep 3')
+        _run_cmd('timedatectl set-ntp false')
+        return {"status": True, "message": "时间同步成功"}
+    except Exception as e:
+        logger.warning(f"timedatectl同步失败: {e}")
+
+    # 方法4: HTTP API（阿里云）
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen('http://ntp.aliyun.com/time.txt', timeout=5)
+        ts = resp.read().decode().strip()
+        date_str = datetime.fromtimestamp(int(float(ts))).strftime("%Y-%m-%d %H:%M:%S")
+        _run_cmd(f'date -s "{date_str}"')
+        return {"status": True, "message": "时间同步成功"}
+    except Exception as e:
+        logger.error(f"所有时间同步方式均失败: {e}")
+        raise Exception(f"时间同步失败，请检查网络连接")
+
+
+# ---------- 系统密码 ----------
+
+def set_password(user: str, password: str, confirm_password: str) -> dict:
+    if not user:
+        raise Exception("用户名不能为空")
+    if " " in password:
+        raise Exception("密码不能包含空格")
+    if password != confirm_password:
+        raise Exception("两次输入的密码不一致")
+    try:
+        result = subprocess.run(
+            ['passwd', user],
+            input=f'{password}\n{password}\n',
+            text=True,
+            capture_output=True,
+            check=True
+        )
+        return {"status": True, "message": "密码修改成功"}
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"密码修改失败: {e.stderr}")
+
+
+# ---------- 内存盘 ----------
+
+def get_memory_disk_info() -> dict:
+    conf = _read_file('/proc/meminfo')
+    mem_total_match = re.search(r"MemTotal:\s*(\d+) kB", conf)
+    mem_total = mem_total_match.group(1) if mem_total_match else "0"
+    mount_file = _get_plugin_path('mount.json')
+    mount_info = {}
+    if os.path.exists(mount_file):
+        try:
+            mount_info = json.loads(_read_file(mount_file))
+        except:
+            mount_info = {}
+    for path in mount_info:
+        mount_info[path]['used_size'] = _get_dir_size(path)
+    _write_file(mount_file, json.dumps(mount_info))
+    return {"mount_info": mount_info, "mem_total": mem_total}
+
+
+def create_memory_disk(path: str, size: int) -> dict:
+    conf = _read_file('/proc/meminfo')
+    mem_total = int(re.search(r"MemTotal:\s*(\d+) kB", conf).group(1))
+    if size * 1024 > mem_total / 2:
+        raise Exception("内存盘最大容量不能超过物理内存的50%")
+    if not path.startswith('/'):
+        raise Exception("请输入绝对路径")
+
+    if path == '/tmp':
+        os.makedirs('/tmp_backup', exist_ok=True)
+        _run_cmd(r'\cp -a -r /tmp/* /tmp_backup/')
+    else:
+        os.makedirs(path, exist_ok=True)
+        if os.path.isdir(path) and os.listdir(path):
+            raise Exception("该目录已存在文件，请更换目录")
+
+    _mount_tmpfs(path, size)
+    return {"status": True, "message": "内存盘创建成功"}
+
+
+def delete_memory_disk(path: str) -> dict:
+    mount_file = _get_plugin_path('mount.json')
+    mount_info = {}
+    if os.path.exists(mount_file):
+        mount_info = json.loads(_read_file(mount_file))
+
+    if path in mount_info:
+        del mount_info[path]
+        _write_file(mount_file, json.dumps(mount_info))
+        if path == '/tmp':
+            os.makedirs('/tmp_backup', exist_ok=True)
+            _run_cmd(r'\cp -a -r /tmp/* /tmp_backup/')
+        fstab = _read_file('/etc/fstab')
+        fstab = re.sub(rf"tmpfs\s*{re.escape(path)}\s.*?\n", '', fstab)
+        _write_file('/etc/fstab', fstab)
+        _run_cmd(f'umount {path}')
+        if path == '/tmp':
+            _run_cmd(r'\cp -a -r /tmp_backup/* /tmp/')
+            shutil.rmtree('/tmp_backup', ignore_errors=True)
+        return {"status": True, "message": "卸载成功，部分目录可能需要重启服务器才能生效"}
+    return {"status": False, "message": "卸载失败"}
+
+
+def _mount_tmpfs(mount_path: str, mount_size: int):
+    mount_file = _get_plugin_path('mount.json')
+    mount_info = json.loads(_read_file(mount_file)) if os.path.exists(mount_file) else {}
+
+    parent = '/'.join(mount_path.split('/')[:-1])
+    if parent in mount_info:
+        raise Exception("不允许挂载到已挂载的子目录下")
+
+    fstab = _read_file('/etc/fstab')
+    statement = f"tmpfs {mount_path} tmpfs size={mount_size}m 0 0\n"
+    pattern = rf"tmpfs\s*{re.escape(mount_path)}\s*tmpfs\s*[0-9a-zA-Z\s=]*"
+    if re.search(pattern, fstab):
+        fstab = re.sub(pattern, statement.strip(), fstab)
+    else:
+        fstab += statement
+    _write_file('/etc/fstab', fstab)
+    _run_cmd(f'umount {mount_path}')
+    _run_cmd('mount -a')
+
+    mount_info[mount_path] = {"size": mount_size}
+    _write_file(mount_file, json.dumps(mount_info))
+
+
+def _get_plugin_path(filename: str) -> str:
+    base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "system")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, filename)
+
+
+# ---------- Hosts ----------
+
+def get_hosts_list() -> dict:
+    hosts = {}
+    for line in _read_file('/etc/hosts').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('#'):
+            status = 0
+            line = line[1:].strip()
+        else:
+            status = 1
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2:
+            continue
+        ip, domain = parts
+        if not _check_ip(ip):
+            continue
+        hosts[domain] = {"domain": domain, "ip": ip, "status": status}
+    return hosts
+
+
+def add_hosts(domain: str, ip: str) -> dict:
+    if not _check_ip(ip):
+        raise Exception("IP地址格式不正确")
+    lines = _read_file('/etc/hosts').splitlines(keepends=True)
+    found = False
+    for i, line in enumerate(lines):
+        if domain in line:
+            lines[i] = f"{ip}\t{domain}\n"
+            found = True
+            break
+    if not found:
+        lines.append(f"{ip}\t{domain}\n")
+    _write_file('/etc/hosts', ''.join(lines))
+    _run_cmd('systemctl restart NetworkManager.service 2>/dev/null || true')
+    return {"status": True, "message": "Hosts添加成功"}
+
+
+def delete_hosts(domain: str) -> dict:
+    lines = _read_file('/etc/hosts').splitlines(keepends=True)
+    new_lines = [l for l in lines if domain not in l]
+    _write_file('/etc/hosts', ''.join(new_lines))
+    _run_cmd('systemctl restart NetworkManager.service 2>/dev/null || true')
+    return {"status": True, "message": "Hosts删除成功"}
+
+
+def toggle_hosts(domain: str, act: str) -> dict:
+    lines = _read_file('/etc/hosts').splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if domain in line:
+            if act == 'pause' and not line.startswith('#'):
+                lines[i] = f"#{line}"
+            elif act == 'resume' and line.startswith('#'):
+                lines[i] = line.lstrip('#')
+    _write_file('/etc/hosts', ''.join(lines))
+    _run_cmd('systemctl restart NetworkManager.service 2>/dev/null || true')
+    msg = "暂停成功" if act == 'pause' else "启用成功"
+    return {"status": True, "message": msg}
+
+
+# ---------- 工具函数 ----------
+
+def _read_file(path: str) -> str:
+    if not os.path.exists(path):
+        return ''
+    with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+        return f.read()
+
+
+def _write_file(path: str, content: str, append: bool = False):
+    mode = 'a' if append else 'w'
+    with open(path, mode, encoding='utf-8') as f:
+        f.write(content)
+
+
+def _run_cmd(cmd: str) -> str:
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+        return result.stdout.strip()
+    except Exception as e:
+        logger.error(f"命令执行失败: {cmd}, 错误: {e}")
+        return ''
+
+
+def _sed_i(pattern: str, file_path: str):
+    _run_cmd(f"sed -i '{pattern}' {file_path}")
+
+
+def _get_dir_size(path: str) -> int:
+    try:
+        result = _run_cmd(f'du -sb {path} 2>/dev/null')
+        if result:
+            return int(result.split()[0])
+    except:
+        pass
+    return 0
+
+
+def _get_distro() -> str:
+    try:
+        import distro
+        return distro.name()
+    except:
+        try:
+            result = _run_cmd('cat /etc/os-release | grep "^NAME="')
+            return result.replace('NAME=', '').replace('"', '').strip()
+        except:
+            return 'linux'

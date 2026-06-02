@@ -82,6 +82,8 @@ print_menu() {
     ssl_status=$(get_ssl_status)
     local entrance_status
     entrance_status=$(get_security_entrance)
+    local domain_binding_status
+    domain_binding_status=$(get_domain_binding)
 
     echo -e "${YELLOW}面板状态信息：${NC}"
     echo "----------------------------------------"
@@ -89,6 +91,7 @@ print_menu() {
     echo -e "  监听端口：    ${BLUE}$current_port${NC}"
     echo -e "  SSL状态：     $ssl_status"
     echo -e "  安全入口：    $entrance_status"
+    echo -e "  域名绑定：    $domain_binding_status"
     echo -e "  安装目录：    ${BLUE}$BASE_DIR${NC}"
     echo "----------------------------------------"
     echo ""
@@ -101,7 +104,8 @@ print_menu() {
     echo "  5) 开关面板 SSL"
     echo "  6) 修改 admin 密码"
     echo "  7) 修改面板入口"
-    echo "  8) 卸载面板"
+    echo "  8) 绑定域名"
+    echo "  9) 卸载面板"
     echo "  0) 退出"
     echo ""
 }
@@ -226,6 +230,16 @@ get_security_entrance() {
     fi
 }
 
+get_domain_binding() {
+    local domain
+    domain=$(grep -E "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$domain" ]; then
+        echo -e "${YELLOW}[未绑定]${NC}"
+    else
+        echo -e "${BLUE}$domain${NC}"
+    fi
+}
+
 change_security_entrance() {
     local current_entrance
     current_entrance=$(grep -E "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
@@ -312,6 +326,67 @@ change_admin_password() {
     fi
 }
 
+change_domain_binding() {
+    local current_domain
+    current_domain=$(grep -E "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$current_domain" ]; then
+        echo -e "${YELLOW}当前绑定域名：${RED}[未绑定]${NC}"
+    else
+        echo -e "${YELLOW}当前绑定域名：${BLUE}$current_domain${NC}"
+    fi
+    echo ""
+    echo -e "${YELLOW}域名绑定说明：${NC}"
+    echo "  - 设置后仅该域名可以访问面板，其他域名返回 403"
+    echo "  - 中间件动态生效，修改后无需重启服务"
+    echo ""
+    echo "请选择操作："
+    echo "  1) 设置/修改绑定域名"
+    echo "  2) 清除绑定（不限制域名访问）"
+    echo "  0) 取消"
+    echo ""
+    read -p "请选择 [0-2]: " domain_choice
+    case $domain_choice in
+        1)
+            echo ""
+            read -p "请输入要绑定的域名（如 panel.example.com）: " new_domain
+            if [ -z "$new_domain" ]; then
+                echo -e "${RED}[错误] 域名不能为空${NC}"
+                return
+            fi
+            if ! [[ "$new_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$ ]]; then
+                echo -e "${RED}[错误] 域名格式无效，请输入正确的域名（如 panel.example.com）${NC}"
+                return
+            fi
+            if grep -q "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s/^DOMAIN_BINDING=.*/DOMAIN_BINDING=$new_domain/" "$CONFIG_FILE"
+            else
+                echo "DOMAIN_BINDING=$new_domain" >> "$CONFIG_FILE"
+            fi
+            echo -e "${GREEN}[成功] 域名绑定已设置为 ${BLUE}$new_domain${NC}"
+            echo -e "${YELLOW}[提示] 已立即生效，无需重启服务${NC}"
+            ;;
+        2)
+            echo ""
+            read -p "确认清除域名绑定？（面板将允许任意域名访问）(y/n): " confirm
+            if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                if grep -q "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null; then
+                    sed -i "s/^DOMAIN_BINDING=.*/DOMAIN_BINDING=/" "$CONFIG_FILE"
+                fi
+                echo -e "${GREEN}[成功] 域名绑定已清除${NC}"
+                echo -e "${YELLOW}[提示] 已立即生效，无需重启服务${NC}"
+            else
+                echo -e "${YELLOW}[信息] 已取消${NC}"
+            fi
+            ;;
+        0)
+            echo -e "${YELLOW}[信息] 已取消${NC}"
+            ;;
+        *)
+            echo -e "${RED}[错误] 无效的选项${NC}"
+            ;;
+    esac
+}
+
 uninstall_panel() {
     echo -e "${YELLOW}==============================${NC}"
     echo -e "${YELLOW}  卸载 BlackPotBPanel 面板${NC}"
@@ -362,7 +437,7 @@ main() {
     while true; do
         print_banner
         print_menu
-        read -p "请输入选项 [0-8]: " choice
+        read -p "请输入选项 [0-9]: " choice
         echo ""
         case $choice in
             1)
@@ -387,6 +462,9 @@ main() {
                 change_security_entrance
                 ;;
             8)
+                change_domain_binding
+                ;;
+            9)
                 uninstall_panel
                 ;;
             0)

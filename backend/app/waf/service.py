@@ -10,6 +10,7 @@ from app.waf.manager_service import WAFManagerService
 from config.settings import settings
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -357,6 +358,157 @@ async def delete_ssl_cert(db: AsyncSession, cert_id: int) -> bool:
     except Exception as e:
         logger.error(f"删除SSL证书失败: {e}")
         raise Exception(f"删除SSL证书失败: {str(e)}")
+
+
+async def generate_self_signed_cert(
+    db: AsyncSession,
+    name: str,
+    domain: str,
+    days_valid: int = 365,
+    key_size: int = 2048,
+    organization: str = "Self-Signed",
+    signature_algorithm: str = "SHA256"
+) -> Tuple[models.SSLCert, str, str]:
+    """
+    生成自签SSL证书
+
+    Args:
+        db: 数据库会话
+        name: 证书名称
+        domain: 证书域名
+        days_valid: 有效期（天）
+        key_size: RSA密钥长度 (2048/4096)
+        organization: 组织名称
+        signature_algorithm: 签名算法 (SHA256/SHA384/SHA512)
+
+    Returns:
+        Tuple[models.SSLCert, str, str]: 证书对象, 私钥PEM, 证书PEM
+
+    Raises:
+        Exception: 当证书名称已存在或生成失败时抛出异常
+    """
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.backends import default_backend
+        import datetime as dt
+
+        # 检查证书名称是否已存在
+        result = await db.execute(
+            select(models.SSLCert).where(models.SSLCert.name == name)
+        )
+        existing_cert = result.scalar_one_or_none()
+
+        if existing_cert:
+            raise Exception(f"SSL证书名称 '{name}' 已存在")
+
+        # 验证参数
+        if key_size not in (2048, 4096):
+            raise Exception("key_size 必须为 2048 或 4096")
+
+        hash_map = {
+            "SHA256": hashes.SHA256(),
+            "SHA384": hashes.SHA384(),
+            "SHA512": hashes.SHA512(),
+        }
+        hash_algorithm = hash_map.get(signature_algorithm.upper())
+        if not hash_algorithm:
+            raise Exception("signature_algorithm 必须为 SHA256、SHA384 或 SHA512")
+
+        # 生成 RSA 私钥
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=key_size,
+            backend=default_backend()
+        )
+
+        # 构建证书主题和颁发者（自签证书两者相同）
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization),
+            x509.NameAttribute(NameOID.COMMON_NAME, domain),
+        ])
+
+        now = dt.datetime.now(dt.timezone.utc)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now)
+            .not_valid_after(now + dt.timedelta(days=days_valid))
+            .add_extension(
+                x509.SubjectAlternativeName([x509.DNSName(domain)]),
+                critical=False,
+            )
+            .sign(private_key, hash_algorithm, default_backend())
+        )
+
+        # 导出 PEM 格式
+        key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode("utf-8")
+
+        cert_pem = cert.public_bytes(
+            encoding=serialization.Encoding.PEM
+        ).decode("utf-8")
+
+        # 保存到文件
+        ssl_base_path = settings.WEBSITE_SSL_PATH
+        cert_dir = os.path.join(ssl_base_path, name)
+
+        if not os.path.exists(ssl_base_path):
+            os.makedirs(ssl_base_path, exist_ok=True)
+
+        if not os.path.exists(cert_dir):
+            os.makedirs(cert_dir, exist_ok=True)
+        else:
+            raise Exception(f"SSL证书目录 '{name}' 已存在")
+
+        key_file_path = os.path.join(cert_dir, f"{name}.key")
+        with open(key_file_path, "w", encoding="utf-8") as f:
+            f.write(key_pem)
+
+        pem_file_path = os.path.join(cert_dir, f"{name}.pem")
+        with open(pem_file_path, "w", encoding="utf-8") as f:
+            f.write(cert_pem)
+
+        # 解析证书信息
+        domain_name, issuer_name, expiry_date = parse_ssl_cert(cert_pem)
+
+        # 创建数据库记录
+        db_cert = models.SSLCert(
+            name=name,
+            domain=domain_name or domain,
+            issuer=issuer_name,
+            expiry_date=expiry_date
+        )
+        db.add(db_cert)
+        await db.commit()
+        await db.refresh(db_cert)
+
+        logger.info(f"成功生成自签SSL证书: {name}, 域名: {domain}")
+        return db_cert, key_pem, cert_pem
+
+    except Exception as e:
+        logger.error(f"生成自签SSL证书失败: {e}")
+        # 清理已创建的文件
+        try:
+            if os.path.exists(cert_dir):
+                key_file = os.path.join(cert_dir, f"{name}.key")
+                pem_file = os.path.join(cert_dir, f"{name}.pem")
+                if os.path.exists(key_file):
+                    os.remove(key_file)
+                if os.path.exists(pem_file):
+                    os.remove(pem_file)
+                os.rmdir(cert_dir)
+        except Exception:
+            pass
+        raise Exception(f"生成自签SSL证书失败: {str(e)}")
 
 
 async def get_ssl_cert_detail(db: AsyncSession, cert_id: int) -> Optional[dict]:

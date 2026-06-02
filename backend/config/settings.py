@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # 安全入口（留空表示不启用）
     SECURITY_ENTRANCE: str = ""
     
+    # 域名绑定（留空表示不启用，设置后仅该域名可访问面板）
+    DOMAIN_BINDING: str = ""
+    
     # 面板SSL配置
     SSL_ENABLED: bool = False
     SSL_CERT_PATH: str = "./data/ssl/ssl.crt"

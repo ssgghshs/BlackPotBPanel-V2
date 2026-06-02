@@ -42,6 +42,22 @@ def _read_security_entrance() -> str:
     return ""
 
 
+def _read_domain_binding() -> str:
+    """从 setting.conf 动态读取域名绑定配置"""
+    env_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "setting.conf"
+    )
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("DOMAIN_BINDING="):
+                    val = line.split("=", 1)[1].strip()
+                    return val
+    return ""
+
+
 def _check_entrance_cookie(request: Request) -> bool:
     """校验请求中是否携带了正确的安全入口 Cookie"""
     entrance = _read_security_entrance()
@@ -122,6 +138,33 @@ def create_app():
 
 
     api_prefix = "/api/v2"
+
+    # ─── 域名绑定中间件 ───
+    # 无条件注册，内部动态读取配置判断是否启用
+    @app.middleware("http")
+    async def domain_binding_middleware(request: Request, call_next):
+        current_binding = _read_domain_binding()
+        if not current_binding:
+            return await call_next(request)
+
+        host = request.headers.get("host", "")
+        host_name = host.split(":")[0].lower()
+        if host_name != current_binding.lower():
+            return HTMLResponse(
+                status_code=403,
+                content=f"""<!DOCTYPE html>
+<html>
+<head><title>403</title></head>
+<body>
+<center>
+<h1>Forbidden - Please access using the domain name</h1>
+<p>Please access via: <strong>{current_binding}</strong></p>
+</center>
+<hr><center>Blackpotbpanel/2.0</center>
+</body>
+</html>"""
+            )
+        return await call_next(request)
 
     # ─── 安全入口中间件───
     # 在后端 API 层强制校验安全入口，所有请求必须经过入口验证

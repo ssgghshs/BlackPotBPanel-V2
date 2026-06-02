@@ -82,6 +82,8 @@ print_menu() {
     ssl_status=$(get_ssl_status)
     local entrance_status
     entrance_status=$(get_security_entrance)
+    local domain_binding_status
+    domain_binding_status=$(get_domain_binding)
 
     echo -e "${YELLOW}Panel Status:${NC}"
     echo "----------------------------------------"
@@ -89,6 +91,7 @@ print_menu() {
     echo -e "  Port:         ${BLUE}$current_port${NC}"
     echo -e "  SSL:          $ssl_status"
     echo -e "  Entrance:     $entrance_status"
+    echo -e "  Domain Bind:  $domain_binding_status"
     echo -e "  Install Path: ${BLUE}$BASE_DIR${NC}"
     echo "----------------------------------------"
     echo ""
@@ -101,7 +104,8 @@ print_menu() {
     echo "  5) Toggle panel SSL"
     echo "  6) Change admin password"
     echo "  7) Change security entrance"
-    echo "  8) Uninstall panel"
+    echo "  8) Bind domain name"
+    echo "  9) Uninstall panel"
     echo "  0) Exit"
     echo ""
 }
@@ -226,6 +230,16 @@ get_security_entrance() {
     fi
 }
 
+get_domain_binding() {
+    local domain
+    domain=$(grep -E "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$domain" ]; then
+        echo -e "${YELLOW}[Not bound]${NC}"
+    else
+        echo -e "${BLUE}$domain${NC}"
+    fi
+}
+
 change_security_entrance() {
     local current_entrance
     current_entrance=$(grep -E "^SECURITY_ENTRANCE=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
@@ -312,6 +326,67 @@ change_admin_password() {
     fi
 }
 
+change_domain_binding() {
+    local current_domain
+    current_domain=$(grep -E "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$current_domain" ]; then
+        echo -e "${YELLOW}Current bound domain: ${RED}[Not bound]${NC}"
+    else
+        echo -e "${YELLOW}Current bound domain: ${BLUE}$current_domain${NC}"
+    fi
+    echo ""
+    echo -e "${YELLOW}Domain Binding:${NC}"
+    echo "  - Only this domain will be allowed to access the panel, others get 403"
+    echo "  - Takes effect immediately, no restart required"
+    echo ""
+    echo "Select an option:"
+    echo "  1) Set / change bound domain"
+    echo "  2) Clear binding (allow any domain)"
+    echo "  0) Cancel"
+    echo ""
+    read -p "Choose [0-2]: " domain_choice
+    case $domain_choice in
+        1)
+            echo ""
+            read -p "Enter domain to bind (e.g. panel.example.com): " new_domain
+            if [ -z "$new_domain" ]; then
+                echo -e "${RED}[Error] Domain cannot be empty${NC}"
+                return
+            fi
+            if ! [[ "$new_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}$ ]]; then
+                echo -e "${RED}[Error] Invalid domain format. Use a valid domain like panel.example.com${NC}"
+                return
+            fi
+            if grep -q "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null; then
+                sed -i "s/^DOMAIN_BINDING=.*/DOMAIN_BINDING=$new_domain/" "$CONFIG_FILE"
+            else
+                echo "DOMAIN_BINDING=$new_domain" >> "$CONFIG_FILE"
+            fi
+            echo -e "${GREEN}[OK] Domain binding set to ${BLUE}$new_domain${NC}"
+            echo -e "${YELLOW}[Hint] Already active, no restart needed${NC}"
+            ;;
+        2)
+            echo ""
+            read -p "Confirm clearing domain binding? (any domain will be allowed) (y/n): " confirm
+            if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+                if grep -q "^DOMAIN_BINDING=" "$CONFIG_FILE" 2>/dev/null; then
+                    sed -i "s/^DOMAIN_BINDING=.*/DOMAIN_BINDING=/" "$CONFIG_FILE"
+                fi
+                echo -e "${GREEN}[OK] Domain binding cleared${NC}"
+                echo -e "${YELLOW}[Hint] Already active, no restart needed${NC}"
+            else
+                echo -e "${YELLOW}[Info] Cancelled${NC}"
+            fi
+            ;;
+        0)
+            echo -e "${YELLOW}[Info] Cancelled${NC}"
+            ;;
+        *)
+            echo -e "${RED}[Error] Invalid option${NC}"
+            ;;
+    esac
+}
+
 uninstall_panel() {
     echo -e "${YELLOW}==============================${NC}"
     echo -e "${YELLOW}  Uninstall BlackPotBPanel${NC}"
@@ -362,7 +437,7 @@ main() {
     while true; do
         print_banner
         print_menu
-        read -p "Please select an option [0-8]: " choice
+        read -p "Please select an option [0-9]: " choice
         echo ""
         case $choice in
             1)
@@ -387,6 +462,9 @@ main() {
                 change_security_entrance
                 ;;
             8)
+                change_domain_binding
+                ;;
+            9)
                 uninstall_panel
                 ;;
             0)

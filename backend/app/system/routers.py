@@ -60,7 +60,7 @@ async def get_env_config(current_user = Depends(get_current_active_user)):
         
         return schemas.EnvConfigResponse(
             configs=allowed_configs,
-            message="成功获取环境配置"
+            message="success"
         )
     except Exception as e:
         logging.error(f"读取环境配置失败: {e}")
@@ -256,4 +256,178 @@ async def update_ssl_cert(
         )
 
 
-       
+# ==================== 系统设置（服务器设置）====================
+
+@router.get("/settings", response_model=schemas.SystemSettingsResponse, summary="获取所有系统设置（合并接口）")
+async def get_system_settings(
+    current_user = Depends(get_current_active_user)
+):
+    """获取所有系统设置（DNS、Swap、时区、Hosts、内存盘、镜像源等）"""
+    try:
+        settings = await service.get_all_settings()
+        return schemas.SystemSettingsResponse(**settings)
+    except Exception as e:
+        logger.error(f"获取系统设置失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取系统设置失败: {str(e)}"
+        )
+
+
+@router.post("/dns/set", summary="设置DNS")
+async def set_dns(
+    dns_data: schemas.DNSConfig,
+    current_user = Depends(get_current_active_user)
+):
+    """设置DNS服务器地址"""
+    try:
+        result = service.set_dns_config(dns1=dns_data.dns1, dns2=dns_data.dns2)
+        return result
+    except Exception as e:
+        logger.error(f"设置DNS失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/dns/test", summary="测试DNS可用性")
+async def test_dns(
+    dns_data: schemas.DNSConfig,
+    current_user = Depends(get_current_active_user)
+):
+    """测试指定的DNS服务器是否可用"""
+    try:
+        result = service.test_dns(dns1=dns_data.dns1, dns2=dns_data.dns2)
+        return result
+    except Exception as e:
+        logger.error(f"测试DNS失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/swap/set", summary="设置Swap")
+async def set_swap(
+    swap_data: schemas.SwapSetRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """设置Swap虚拟内存大小（设为0则关闭Swap）"""
+    try:
+        result = service.set_swap(size=swap_data.size)
+        return result
+    except Exception as e:
+        logger.error(f"设置Swap失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/timezone/set", summary="设置时区")
+async def set_timezone(
+    tz_data: schemas.TimezoneSetRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """设置系统时区"""
+    try:
+        result = service.set_timezone(area=tz_data.area, zone=tz_data.zone)
+        return result
+    except Exception as e:
+        logger.error(f"设置时区失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/time/sync", summary="同步系统时间")
+async def sync_system_time(
+    current_user = Depends(get_current_active_user)
+):
+    """从网络同步系统时间"""
+    try:
+        result = service.sync_time()
+        return result
+    except Exception as e:
+        logger.error(f"同步时间失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/password", summary="修改系统密码")
+async def set_system_password(
+    pwd_data: schemas.PasswordSetRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """修改系统用户密码"""
+    try:
+        result = service.set_password(
+            user=pwd_data.user,
+            password=pwd_data.password,
+            confirm_password=pwd_data.confirm_password
+        )
+        return result
+    except Exception as e:
+        logger.error(f"修改密码失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/memory-disk", summary="创建内存盘")
+async def create_memory_disk(
+    disk_data: schemas.MemoryDiskCreate,
+    current_user = Depends(get_current_active_user)
+):
+    """创建内存盘（tmpfs挂载）"""
+    try:
+        result = service.create_memory_disk(path=disk_data.path, size=disk_data.size)
+        return result
+    except Exception as e:
+        logger.error(f"创建内存盘失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/memory-disk/delete", summary="删除内存盘")
+async def delete_memory_disk(
+    disk_data: schemas.MemoryDiskDelete,
+    current_user = Depends(get_current_active_user)
+):
+    """卸载并删除内存盘"""
+    try:
+        result = service.delete_memory_disk(path=disk_data.path)
+        return result
+    except Exception as e:
+        logger.error(f"删除内存盘失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/hosts", summary="添加/修改Hosts")
+async def add_hosts(
+    hosts_data: schemas.HostsCreateRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """添加或修改Hosts记录"""
+    try:
+        result = service.add_hosts(domain=hosts_data.domain, ip=hosts_data.ip)
+        return result
+    except Exception as e:
+        logger.error(f"添加Hosts失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/hosts/delete", summary="删除Hosts")
+async def delete_hosts(
+    hosts_data: schemas.HostsDeleteRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """删除Hosts记录"""
+    try:
+        result = service.delete_hosts(domain=hosts_data.domain)
+        return result
+    except Exception as e:
+        logger.error(f"删除Hosts失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/hosts/toggle", summary="暂停/启用Hosts")
+async def toggle_hosts(
+    toggle_data: schemas.HostsToggleRequest,
+    current_user = Depends(get_current_active_user)
+):
+    """暂停或启用指定的Hosts记录"""
+    try:
+        result = service.toggle_hosts(domain=toggle_data.domain, act=toggle_data.act)
+        return result
+    except Exception as e:
+        logger.error(f"操作Hosts失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
