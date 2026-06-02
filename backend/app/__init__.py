@@ -166,6 +166,13 @@ def create_app():
             )
         return await call_next(request)
 
+    # ─── API 接口访问中间件 ───
+    # 请求头含 Blackpotbpanel-Token / Blackpotbpanel-Timestamp 时走 API Key 认证
+    @app.middleware("http")
+    async def api_auth_middleware(request: Request, call_next):
+        from middleware.api_auth import api_auth_middleware as api_auth
+        return await api_auth(request, call_next)
+
     # ─── 安全入口中间件───
     # 在后端 API 层强制校验安全入口，所有请求必须经过入口验证
     # 白名单路径：入口页面本身、静态资源、API 根路径

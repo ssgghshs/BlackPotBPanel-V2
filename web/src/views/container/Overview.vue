@@ -1,6 +1,4 @@
 <template>
-
-
 <!-- 内容区域  -->
   <!-- 3:7 -->
   <div class="content-layout">
@@ -57,7 +55,9 @@
           <div class="card-content">
             <div class="grid-card-content">
               <!-- 卡片1内容 -->
-              <span class="grid-value">{{ dockerInfo?.image_count !== undefined ? dockerInfo.image_count : '--' }}</span>
+              <div class="stat-item">
+                <span class="grid-value">{{ dockerInfo?.image_count !== undefined ? dockerInfo.image_count : '--' }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -70,7 +70,9 @@
           <div class="card-content">
             <div class="grid-card-content">
               <!-- 卡片2内容 -->
-              <span class="grid-value">{{ dockerInfo?.network_count !== undefined ? dockerInfo.network_count : '--' }}</span>
+               <div class="stat-item">
+                <span class="grid-value">{{ dockerInfo?.network_count !== undefined ? dockerInfo.network_count : '--' }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -83,7 +85,9 @@
           <div class="card-content">
             <div class="grid-card-content">
               <!-- 卡片3内容 -->
-              <span class="grid-value">{{ dockerInfo?.volume_count !== undefined ? dockerInfo.volume_count : '--' }}</span>
+              <div class="stat-item">
+                <span class="grid-value">{{ dockerInfo?.volume_count !== undefined ? dockerInfo.volume_count : '--' }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -96,7 +100,9 @@
           <div class="card-content">
             <div class="grid-card-content">
               <!-- 卡片4内容 -->
-              <span class="grid-value">{{ dockerInfo?.compose_count !== undefined ? dockerInfo.compose_count : '--' }}</span>
+              <div class="stat-item">
+                <span class="grid-value">{{ dockerInfo?.compose_count !== undefined ? dockerInfo.compose_count : '--' }}</span>
+              </div>
             </div>
           </div>
         </div>

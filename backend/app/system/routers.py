@@ -94,7 +94,8 @@ async def update_env_config(
             ("PORT" in config_dict) or
             ("SSL_ENABLED" in config_dict) or
             ("LOGIN_LIMIT" in config_dict) or
-            ("SECURITY_ENTRANCE" in config_dict)
+            ("SECURITY_ENTRANCE" in config_dict) or
+            ("API_OPEN" in config_dict)
         ):
             # 异步执行服务重启
             asyncio.create_task(service.restart_service())
@@ -109,6 +110,9 @@ async def update_env_config(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="更新环境配置失败"
         )
+
+
+
 
 @router.get("/config/recycle", response_model=Dict[str, str])
 async def get_recycle_config(
@@ -431,3 +435,28 @@ async def toggle_hosts(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post("/config/api/generate-key", response_model=dict)
+async def generate_api_key(
+    current_user = Depends(get_current_active_user)
+):
+    """生成新的 API 接口密钥"""
+    try:
+        if current_user.role != RoleEnum.ADMIN.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有管理员可以生成 API 密钥"
+            )
+        from middleware.api_auth import generate_api_key, _read_api_config, _write_api_config
+        new_key = generate_api_key()
+        api_cfg = _read_api_config()
+        api_cfg["API_KEY"] = new_key
+        _write_api_config(api_cfg)
+        return {"code": 200, "message": "API 密钥已生成", "data": {"API_KEY": new_key}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"生成 API 密钥失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成 API 密钥失败: {str(e)}"
+        )

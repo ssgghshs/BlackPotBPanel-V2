@@ -91,6 +91,11 @@
                 <a-button type="primary" size="small" style="margin-left: 10px;" @click="handleSaveDomainBinding">{{ t('save') }}</a-button>
               </a-form-item>
               <a-alert type="warning" show-icon  :closable="false" style="margin: -8px 0 8px 130px;">{{ t('domainBindingNote') }}</a-alert>
+              <a-form-item :label="t('apiInterface') + ':'" class="form-item">
+                <a-switch v-model="systemConfig.API_OPEN" @change="handleSaveApiOpen" />
+                <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3);">{{ t('apiInterfaceNote') }}</span>
+                <a-link  style="margin-left: 10px;" @click="handleOpenApiConfigDialog">{{ t('settings') }}</a-link>
+              </a-form-item>
             </a-form>
           </template>
           <template v-else>
@@ -380,6 +385,27 @@
       @select="handleMiniFileManagerSelect"
     />
 
+    <!-- API 接口配置对话框 -->
+    <a-modal v-model:visible="apiConfigModalVisible" title="API Interface" @ok="handleSaveApiConfig" @cancel="handleCancelApiConfig" :mask-closable="false">
+      <a-form layout="vertical" :model="apiConfigForm">
+        <a-form-item label="API Key">
+          <a-input-password v-model="apiConfigForm.API_KEY" readonly placeholder="Not Set" />
+        </a-form-item>
+        <div style="margin: -8px 0 12px 0;">
+          <a-button type="primary" size="small" @click="handleGenerateApiKey">{{ t('generate') }}</a-button>
+          <a-button size="small" style="margin-left: 8px;" @click="handleCopyApiKey">{{ t('copy') }}</a-button>
+        </div>
+        <a-form-item :label="t('ipWhitelist')">
+          <a-input v-model="apiConfigForm.API_IP_WHITELIST" placeholder="0.0.0.0/0" />
+        </a-form-item>
+        <a-alert type="warning" show-icon :closable="false" style="margin: 0 0 12px 0;">{{ t('ipWhitelistFillinNote') }}</a-alert>
+        <a-form-item :label="t('validityTime')">
+          <a-input-number v-model="apiConfigForm.API_KEY_VALIDITY_TIME" :min="0" :max="1440" style="width: 100%;" />
+          <span style="font-size: 12px; color: var(--color-text-3);">{{ t('unlimited') }}</span>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
  </template>
 
 <script setup>
@@ -387,7 +413,7 @@ import { reactive, onMounted, computed, ref } from 'vue';
 import { t, changeLocale, getCurrentLocale } from '../../utils/locale'
 import { Message} from '@arco-design/web-vue';
 import { IconLink, IconUpload, IconFolder } from '@arco-design/web-vue/es/icon';
-import { getEnvConfig, updateEnvConfig, restartService, getSSLCert, updateSSLCert, getSystemSettings, setDNS, testDNS, setSwap, setTimezone, syncTime, setSystemPassword, createMemoryDisk, deleteMemoryDisk, addHosts, deleteHosts, toggleHosts } from '../../api/system';
+import { getEnvConfig, updateEnvConfig, generateApiKey, restartService, getSSLCert, updateSSLCert, getSystemSettings, setDNS, testDNS, setSwap, setTimezone, syncTime, setSystemPassword, createMemoryDisk, deleteMemoryDisk, addHosts, deleteHosts, toggleHosts } from '../../api/system';
 // 导入用户状态和函数
 import { isAdmin, fetchCurrentUser as fetchCurrentUserStore } from '../../stores/user';
 import MiniFileManager from '../../components/file/MiniFileManager.vue';
@@ -412,13 +438,25 @@ const systemConfig = reactive({
   PORT: 8000, // 确保默认值是数字类型
   SSL_ENABLED: false,
   SECURITY_ENTRANCE: '',
-  DOMAIN_BINDING: ''
+  DOMAIN_BINDING: '',
+  API_OPEN: true,
+  API_KEY: '',
+  API_IP_WHITELIST: '127.0.0.1',
+  API_KEY_VALIDITY_TIME: 0
 });
 
 // 当前用户信息（保留用于兼容性，实际使用store中的currentUser）
 const currentUser = reactive({
   username: '',
   is_admin: false
+});
+
+// API 接口配置对话框
+const apiConfigModalVisible = ref(false);
+const apiConfigForm = reactive({
+  API_KEY: '',
+  API_IP_WHITELIST: '127.0.0.1',
+  API_KEY_VALIDITY_TIME: 0
 });
 
 // 重启服务确认对话框可见性
@@ -603,6 +641,18 @@ const fetchSystemConfig = async () => {
     if (configs.DOMAIN_BINDING !== undefined) {
       systemConfig.DOMAIN_BINDING = configs.DOMAIN_BINDING;
     }
+    if (configs.API_OPEN !== undefined) {
+      systemConfig.API_OPEN = configs.API_OPEN === 'True' || configs.API_OPEN === true;
+    }
+    if (configs.API_KEY !== undefined) {
+      systemConfig.API_KEY = configs.API_KEY;
+    }
+    if (configs.API_IP_WHITELIST !== undefined) {
+      systemConfig.API_IP_WHITELIST = configs.API_IP_WHITELIST;
+    }
+    if (configs.API_KEY_VALIDITY_TIME !== undefined) {
+      systemConfig.API_KEY_VALIDITY_TIME = Number(configs.API_KEY_VALIDITY_TIME);
+    }
     
     // 更新用户界面配置（从API获取）
     if (configs.LANGUAGE !== undefined) {
@@ -736,9 +786,9 @@ const fetchServerSettings = async () => {
 const handleSaveDNS = async () => {
   try {
     const res = await setDNS({ dns1: serverForms.dns.dns1, dns2: serverForms.dns.dns2 })
-    Message.success(res.message || 'DNS设置成功')
+    Message.success(t.value('configSaveSuccess'))
   } catch (error) {
-    Message.error(error.message || 'DNS设置失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
@@ -746,12 +796,12 @@ const handleTestDNS = async () => {
   try {
     const res = await testDNS({ dns1: serverForms.dns.dns1, dns2: serverForms.dns.dns2 })
     if (res.status) {
-      Message.success(res.message || 'DNS可用')
+      Message.success(t.value('dnsAvailable'))
     } else {
-      Message.warning(res.message || 'DNS不可用')
+      Message.warning(t.value('dnsUnavailable'))
     }
   } catch (error) {
-    Message.error(error.message || 'DNS测试失败')
+    Message.error(t.value('dnsTestFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
@@ -759,10 +809,10 @@ const handleTestDNS = async () => {
 const handleSaveSwap = async () => {
   try {
     const res = await setSwap({ size: serverForms.swap.size })
-    Message.success(res.message || 'Swap设置成功')
+    Message.success(t.value('configSaveSuccess'))
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || 'Swap设置失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
@@ -770,27 +820,27 @@ const handleSaveSwap = async () => {
 const handleSaveTimezone = async () => {
   try {
     const res = await setTimezone({ area: serverForms.timezone.area, zone: serverForms.timezone.zone })
-    Message.success(res.message || '时区设置成功')
+    Message.success(t.value('configSaveSuccess'))
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || '时区设置失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
 const handleSyncTime = async () => {
   try {
     const res = await syncTime()
-    Message.success(res.message || '时间同步成功')
+    Message.success(t.value('timeSyncSuccess'))
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || '时间同步失败')
+    Message.error(t.value('timeSyncFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
 // Password
 const handleSavePassword = async () => {
   if (serverForms.password.password !== serverForms.password.confirmPassword) {
-    Message.error(t('passwordMismatch'))
+    Message.error(t.value('passwordMismatch'))
     return
   }
   try {
@@ -799,27 +849,27 @@ const handleSavePassword = async () => {
       password: serverForms.password.password,
       confirm_password: serverForms.password.confirmPassword
     })
-    Message.success(res.message || '密码修改成功')
+    Message.success(t.value('configSaveSuccess'))
     serverForms.password.password = ''
     serverForms.password.confirmPassword = ''
   } catch (error) {
-    Message.error(error.message || '密码修改失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
 // Memory disk
 const handleCreateMemoryDisk = async () => {
   if (!memoryDiskForm.path) {
-    Message.error('请填写路径')
+    Message.error(t.value('createMemoryDisk'))
     return
   }
   try {
     const res = await createMemoryDisk({ path: memoryDiskForm.path, size: memoryDiskForm.size })
-    Message.success(res.message || '内存盘创建成功')
+    Message.success(t.value('configSaveSuccess'))
     showMemoryDiskModal.value = false
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || '创建内存盘失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
@@ -833,46 +883,46 @@ const handleMiniFileManagerSelect = (data) => {
 const handleDeleteMemoryDisk = async (path) => {
   try {
     const res = await deleteMemoryDisk({ path })
-    Message.success(res.message || '内存盘删除成功')
+    Message.success(t.value('configSaveSuccess'))
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || '删除内存盘失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
 // Hosts
 const handleSaveHosts = async () => {
   if (!hostsForm.domain || !hostsForm.ip) {
-    Message.error('请填写完整信息')
+    Message.error(t.value('addHost'))
     return
   }
   try {
     const res = await addHosts({ domain: hostsForm.domain, ip: hostsForm.ip })
-    Message.success(res.message || 'Hosts保存成功')
+    Message.success(t.value('configSaveSuccess'))
     showHostsModal.value = false
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || 'Hosts保存失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
 const handleDeleteHosts = async (domain) => {
   try {
     const res = await deleteHosts({ domain })
-    Message.success(res.message || 'Hosts删除成功')
+    Message.success(t.value('configSaveSuccess'))
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || 'Hosts删除失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
 const handleToggleHosts = async (domain, act) => {
   try {
     const res = await toggleHosts({ domain, act })
-    Message.success(res.message || '操作成功')
+    Message.success(t.value('configSaveSuccess'))
     await fetchServerSettings()
   } catch (error) {
-    Message.error(error.message || '操作失败')
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')))
   }
 }
 
@@ -935,8 +985,7 @@ const showCertDialog = async () => {
       }
     }
   } catch (error) {
-    console.error('获取证书内容失败:', error);
-    Message.error('获取证书内容失败: ' + (error.message || '未知错误'));
+    Message.error(t.value('getCertFailed') + ': ' + (error.message || t.value('unknownError')));
   }
 };
 
@@ -1452,10 +1501,84 @@ const saveTimezone = async () => {
 const handleSaveDomainBinding = async () => {
   try {
     const response = await updateEnvConfig({ DOMAIN_BINDING: systemConfig.DOMAIN_BINDING });
-    Message.success('域名绑定设置成功');
+    Message.success(t.value('configSaveSuccess'));
   } catch (error) {
-    Message.error('域名绑定设置失败: ' + (error.message || t.value('unknownError')));
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')));
   }
+};
+
+const handleSaveApiOpen = async () => {
+  try {
+    await updateEnvConfig({ API_OPEN: systemConfig.API_OPEN });
+    Message.success(t.value('configSaveSuccess'));
+  } catch (error) {
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')));
+  }
+};
+
+const handleGenerateApiKey = async () => {
+  try {
+    const res = await generateApiKey();
+    systemConfig.API_KEY = res.data.API_KEY;
+    apiConfigForm.API_KEY = res.data.API_KEY;
+    Message.success(t.value('generateApiKeySuccess'));
+  } catch (error) {
+    Message.error(t.value('generateApiKeyFailed') + ': ' + (error.message || t.value('unknownError')));
+  }
+};
+
+const handleCopyApiKey = async () => {
+  const key = apiConfigForm.API_KEY || systemConfig.API_KEY;
+  if (!key) {
+    Message.warning(t.value('generateApiKeyFirst'));
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(key);
+    Message.success('Copy success');
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = key;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      Message.success('Copy success');
+    } catch {
+      Message.error('Copy failed, please copy manually');
+    }
+    document.body.removeChild(textarea);
+  }
+};
+
+const handleOpenApiConfigDialog = () => {
+  apiConfigForm.API_KEY = systemConfig.API_KEY;
+  apiConfigForm.API_IP_WHITELIST = systemConfig.API_IP_WHITELIST;
+  apiConfigForm.API_KEY_VALIDITY_TIME = systemConfig.API_KEY_VALIDITY_TIME;
+  apiConfigModalVisible.value = true;
+};
+
+const handleSaveApiConfig = async () => {
+  try {
+    await updateEnvConfig({
+      API_KEY: apiConfigForm.API_KEY,
+      API_IP_WHITELIST: apiConfigForm.API_IP_WHITELIST,
+      API_KEY_VALIDITY_TIME: apiConfigForm.API_KEY_VALIDITY_TIME
+    });
+    systemConfig.API_KEY = apiConfigForm.API_KEY;
+    systemConfig.API_IP_WHITELIST = apiConfigForm.API_IP_WHITELIST;
+    systemConfig.API_KEY_VALIDITY_TIME = apiConfigForm.API_KEY_VALIDITY_TIME;
+    apiConfigModalVisible.value = false;
+    Message.success(t.value('configSaveSuccess'));
+  } catch (error) {
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')));
+  }
+};
+
+const handleCancelApiConfig = () => {
+  apiConfigModalVisible.value = false;
 };
 
 // 组件挂载时设置当前语言和主题

@@ -22,6 +22,7 @@ ADMIN_CONFIG_FIELDS = [
     'ALGORITHM', 'ACCESS_TOKEN_EXPIRE_MINUTES', 'TIMEZONE', 'ENABLE_DOCS',
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
     'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING',
+    'API_OPEN', 'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME',
 ]
 USER_CONFIG_FIELDS = ['APP_NAME', 'VERSION', 'TIMEZONE', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
 
@@ -31,6 +32,7 @@ ADMIN_CONFIG_EDITABLE = [
     'ALGORITHM', 'ACCESS_TOKEN_EXPIRE_MINUTES', 'TIMEZONE', 'ENABLE_DOCS',
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
     'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING',
+    'API_OPEN', 'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME',
 ]
 USER_CONFIG_EDITABLE = ['APP_NAME', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
 
@@ -110,6 +112,16 @@ async def get_env_config(user_role: str) -> Dict[str, str]:
     try:
         configs = read_env_file()
         
+        # 合并 api.json 中的配置
+        from middleware.api_auth import _read_api_config
+        api_cfg = _read_api_config()
+        if api_cfg.get("API_KEY"):
+            configs["API_KEY"] = api_cfg["API_KEY"]
+        if api_cfg.get("API_IP_WHITELIST"):
+            configs["API_IP_WHITELIST"] = api_cfg["API_IP_WHITELIST"]
+        if api_cfg.get("API_KEY_VALIDITY_TIME") is not None:
+            configs["API_KEY_VALIDITY_TIME"] = str(api_cfg["API_KEY_VALIDITY_TIME"])
+        
         # 根据用户角色过滤配置项
         if user_role == "ADMIN":
             # 管理员可以访问所有非敏感配置
@@ -146,13 +158,26 @@ async def update_env_config(config_data: schemas.EnvConfigUpdate, user_role: str
 
         # 更新配置
         update_data = config_data.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            # 检查字段是否在允许的范围内
-            if key in allowed_fields and value is not None:
-                current_configs[key] = str(value)
+        api_json_fields = {'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME'}
+        api_json_updates = {}
 
-        # 写入配置文件
+        for key, value in update_data.items():
+            if key in allowed_fields and value is not None:
+                if key in api_json_fields:
+                    api_json_updates[key] = value
+                else:
+                    current_configs[key] = str(value)
+
+        # 写入 setting.conf
         write_env_file(current_configs)
+
+        # 写入 api.json（API_KEY、API_IP_WHITELIST、API_KEY_VALIDITY_TIME）
+        if api_json_updates:
+            from middleware.api_auth import _read_api_config, _write_api_config
+            api_cfg = _read_api_config()
+            for k, v in api_json_updates.items():
+                api_cfg[k] = v
+            _write_api_config(api_cfg)
 
         # 根据用户角色过滤返回的配置项
         if user_role == "ADMIN":

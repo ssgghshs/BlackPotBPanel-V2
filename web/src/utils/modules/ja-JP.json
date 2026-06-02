@@ -1712,5 +1712,17 @@
   "serverSettings": "サーバー設定",
   "resume": "再開",
   "domainBinding": "ドメインバインド設定",
-  "domainBindingNote": "ドメインバインド後、パネルはドメインのみアクセス可能"
+  "domainBindingNote": "ドメインバインド後、パネルはドメインのみアクセス可能",
+  "apiInterface": "APIインターフェース",
+  "apiInterfaceNote": "APIインターフェースを使用してパネルインターフェースにアクセスできます",
+  "generate": "生成",
+  "validityTime": "有効期間（分）",
+  "ipWhitelist": "IP 白リスト",
+  "dnsAvailable": "DNS が利用可能",
+  "dnsUnavailable": "DNS が利用できません",
+  "timeSyncSuccess": "時間同期成功",
+  "timeSyncFailed": "時間同期失敗",
+  "generateApiKeySuccess": "API鍵を生成成功",
+  "generateApiKeyFailed": "API鍵を生成失敗しました",
+  "ipWhitelistFillinNote": "IP 白リスト形式：1.2.3.4,5.6.7.8或 10.0.0.0/8,192.168.1.0/24 或 27.0.0.1,10.0.0.0/8,114.114.114.0/24"
 }

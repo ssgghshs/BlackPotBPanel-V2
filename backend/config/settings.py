@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     
     # API文档配置
     ENABLE_DOCS: bool = True
+    # 开放 API 配置
+    API_OPEN: bool = True
     
     # 用户界面配置
     LANGUAGE: str = "zh-CN"
@@ -78,6 +80,7 @@ class Settings(BaseSettings):
     GEOIP_CITY_DB_PATH: str = "./data/GeoLite2-City.mmdb"
     #TTF字体路径
     TTF_FONT_PATH: str = "./data/ttf/DejaVuSans.ttf"
+    API_CONFIG_PATH: str = "./data/api.json"
 
     
     # 基础路径

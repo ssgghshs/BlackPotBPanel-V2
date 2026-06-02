@@ -92,6 +92,10 @@ class EnvConfigBase(BaseModel):
     LOGIN_LIMIT: Optional[bool] = None
     SECURITY_ENTRANCE: Optional[str] = None
     DOMAIN_BINDING: Optional[str] = None
+    API_OPEN: Optional[bool] = None
+    API_KEY: Optional[str] = None
+    API_IP_WHITELIST: Optional[str] = None
+    API_KEY_VALIDITY_TIME: Optional[int] = None
 
 class EnvConfigCreate(EnvConfigBase):
     """创建环境配置模型"""

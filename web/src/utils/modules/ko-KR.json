@@ -1714,5 +1714,17 @@
   "serverSettings": "서버 설정",
   "resume": "재개",
   "domainBinding": "도메인 바인딩 설정",
-  "domainBindingNote": "도메인 바인딩 후 패널은 도메인으로만 접근 가능합니다"
+  "domainBindingNote": "도메인 바인딩 후 패널은 도메인으로만 접근 가능합니다",
+  "apiInterface": "API 인터페이스",
+  "apiInterfaceNote": "API 열기 후 API 키를 사용하여 패널 인터페이스에 접근할 수 있습니다.",
+  "generate": "생성",
+  "validityTime": "유효 시간 (분)",
+  "ipWhitelist": "IP 白리스트",
+  "dnsAvailable": "DNS 사용 가능",
+  "dnsUnavailable": "DNS 사용 불가능",
+  "timeSyncSuccess": "시간 동기화 성공",
+  "timeSyncFailed": "시간 동기화 실패",
+  "generateApiKeySuccess": "API 키 생성 성공",
+  "generateApiKeyFailed": "API 키 생성 실패",
+  "ipWhitelistFillinNote": "IP 白리스트 형식: 1.2.3.4,5.6.7.8 또는 10.0.0.0/8,192.168.1.0/24 또는 27.0.0.1,10.0.0.0/8,114.114.114.0/24"
 }   

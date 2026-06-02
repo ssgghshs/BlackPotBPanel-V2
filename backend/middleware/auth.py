@@ -92,6 +92,14 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    # API 接口认证：如果中间件已验证通过，直接返回 admin 用户
+    if hasattr(request.state, 'api_authed') and request.state.api_authed:
+        result = await db.execute(select(models.User).filter(models.User.username == "admin"))
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+        # 没有 admin 用户则继续走正常 JWT 验证（兜底）
+    
     # 1. 尝试从Authorization头获取token
     authorization = request.headers.get("Authorization")
     token = None

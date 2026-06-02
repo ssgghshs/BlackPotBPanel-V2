@@ -17,6 +17,14 @@ export function updateEnvConfig(data) {
   })
 }
 
+// 生成 API 密钥
+export function generateApiKey() {
+  return request({
+    url: '/system/config/api/generate-key',
+    method: 'post'
+  })
+}
+
 // 获取通用设置
 export function getCommonSettings() {
   return request({

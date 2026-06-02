@@ -1726,5 +1726,17 @@
   "serverSettings": "伺服器設定",
   "resume": "重新啟用",
   "domainBinding": "域名綁定",
-  "domainBindingNote": "綁定域名後，面板只能使用域名訪問，無法使用IP地址訪問"
+  "domainBindingNote": "綁定域名後，面板只能使用域名訪問，無法使用IP地址訪問",
+  "apiInterface": "API接口",
+  "apiInterfaceNote": "啟用後後，可通过 API 密钥訪問面板接口",
+  "generate": "生成",
+  "validityTime": "有効期間（分）",
+  "ipWhitelist": "IP 白リスト",
+  "dnsAvailable": "DNS 可用",
+  "dnsUnavailable": "DNS 不可用",
+  "timeSyncSuccess": "時間同期成功",
+  "timeSyncFailed": "時間同期失敗",
+  "generateApiKeySuccess": "生成API密钥成功",
+  "generateApiKeyFailed": "生成API密钥失败",
+  "ipWhitelistFillinNote": "IP 白リスト格式：1.2.3.4,5.6.7.8或 10.0.0.0/8,192.168.1.0/24 或 27.0.0.1,10.0.0.0/8,114.114.114.0/24"
 }  
