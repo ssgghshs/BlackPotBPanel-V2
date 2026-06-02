@@ -52,6 +52,16 @@ export function getSSLCertDetail(cert_id) {
   })
 }
 
+// 生成自签SSL证书
+export function generateSelfSignedCert(data) {
+  return request({
+    url: '/waf/ssl-certs/self-signed/generate',
+    method: 'post',
+    data
+  })
+}
+
+
 
 // 获取WAF容器状态
 export function getWAFContainerStatus() {

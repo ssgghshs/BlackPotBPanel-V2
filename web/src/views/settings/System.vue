@@ -1,14 +1,8 @@
 <template>
-  <a-card class="settings-container">
-    <template #title>
-      <div class="card-header">
-        <span class="title">{{ t('system') }}</span>
-      </div>
-    </template>
 
     <!--  内容区域  -->
     <div class="content-area">
-      <a-tabs :default-active-key="'panel'" :tab-position="'top'" type="card" >
+      <a-tabs :default-active-key="'panel'" type="card" >
         <a-tab-pane key="panel" :title="t('panelSettings')">
           <a-form :model="formState" layout="horizontal">
             <a-form-item :label="t('appName') + ':'" class="form-item">
@@ -92,6 +86,11 @@
                 <a-switch v-model="systemConfig.SSL_ENABLED" @change="handleSSLChange" />
                 <a-link style="margin-left: 10px;" @click="showCertDialog">{{ t('viewCert') }}</a-link>
               </a-form-item>
+              <a-form-item :label="t('domainBinding') + ':'" class="form-item">
+                <a-input v-model="systemConfig.DOMAIN_BINDING" placeholder="panel.example.com" />
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="handleSaveDomainBinding">{{ t('save') }}</a-button>
+              </a-form-item>
+              <a-alert type="warning" show-icon  :closable="false" style="margin: -8px 0 8px 130px;">{{ t('domainBindingNote') }}</a-alert>
             </a-form>
           </template>
           <template v-else>
@@ -104,6 +103,113 @@
               </a-form-item>
             </a-form>
           </template>
+        </a-tab-pane>
+        <a-tab-pane key="server" :title="t('serverSettings')" v-if="isAdminUser">
+          <a-tabs :default-active-key="'dns'" type="line" position="left" class="server-tabs">
+            <a-tab-pane key="dns" :title="'DNS'">
+              <a-form layout="horizontal" :model="serverForms.dns" style="max-width: 500px;">
+                <a-form-item label="DNS1">
+                  <a-input v-model="serverForms.dns.dns1" placeholder="114.114.114.114" allow-clear />
+                </a-form-item>
+                <a-form-item label="DNS2">
+                  <a-input v-model="serverForms.dns.dns2" placeholder="8.8.8.8" allow-clear />
+                </a-form-item>
+                <a-form-item>
+                  <a-space>
+                    <a-button type="primary" size="small" @click="handleSaveDNS">{{ t('save') }}</a-button>
+                    <a-button size="small" @click="handleTestDNS">{{ t('test') }}</a-button>
+                  </a-space>
+                </a-form-item>
+              </a-form>
+            </a-tab-pane>
+
+            <a-tab-pane key="swap" :title="'Swap'">
+              <a-form layout="horizontal" :model="serverForms.swap" style="max-width: 500px;">
+                <a-form-item label="当前">
+                  <span>{{ swapInfoText }}</span>
+                </a-form-item>
+                <a-form-item label="大小 (MB)">
+                  <a-input-number v-model="serverForms.swap.size" :min="0" :max="8192" style="width: 200px;" />
+                  <span class="desc" style="margin-left: 8px;">设为0则关闭Swap</span>
+                </a-form-item>
+                <a-form-item>
+                  <a-button type="primary" size="small" @click="handleSaveSwap">{{ t('save') }}</a-button>
+                </a-form-item>
+              </a-form>
+            </a-tab-pane>
+
+            <a-tab-pane key="timezone" :title="t('timeZone')">
+              <a-form layout="horizontal" :model="serverForms.timezone" style="max-width: 500px;">
+                <a-form-item label="当前">
+                  <span>{{ serverTimezoneText }}</span>
+                </a-form-item>
+                <a-form-item label="Area">
+                  <a-select v-model="serverForms.timezone.area" style="width: 200px;">
+                    <a-option v-for="item in timezoneZoneList" :key="item.area" :value="item.area">{{ item.area }}</a-option>
+                  </a-select>
+                </a-form-item>
+                <a-form-item label="Zone">
+                  <a-select v-model="serverForms.timezone.zone" style="width: 200px;">
+                    <a-option v-for="z in currentZoneList" :key="z" :value="z">{{ z }}</a-option>
+                  </a-select>
+                </a-form-item>
+                <a-form-item>
+                  <a-space>
+                    <a-button type="primary" size="small" @click="handleSaveTimezone">{{ t('save') }}</a-button>
+                    <a-button size="small" @click="handleSyncTime">{{ t('syncTime') }}</a-button>
+                  </a-space>
+                </a-form-item>
+              </a-form>
+            </a-tab-pane>
+
+            <a-tab-pane key="password" :title="t('systemPassword')">
+              <a-form layout="horizontal" :model="serverForms.password" style="max-width: 500px;">
+                <a-form-item :label="t('username')">
+                  <a-input v-model="serverForms.password.user" placeholder="root" style="width: 200px;" />
+                </a-form-item>
+                <a-form-item :label="t('newPassword')">
+                  <a-input-password v-model="serverForms.password.password" style="width: 200px;" />
+                </a-form-item>
+                <a-form-item :label="t('confirmPassword')">
+                  <a-input-password v-model="serverForms.password.confirmPassword" style="width: 200px;" />
+                </a-form-item>
+                <a-form-item>
+                  <a-button type="primary" size="small" @click="handleSavePassword">{{ t('save') }}</a-button>
+                </a-form-item>
+              </a-form>
+            </a-tab-pane>
+
+            <a-tab-pane key="memory-disk" :title="t('memoryDisk')">
+              <a-space style="margin-bottom: 16px;">
+                <a-button size="small" type="primary" @click="showMemoryDiskModal = true">{{ t('create') }}</a-button>
+              </a-space>
+              <a-table :data="memoryDiskList" :columns="memoryDiskColumns" :pagination="false" size="small" v-if="memoryDiskList.length > 0">
+                <template #action="{ record }">
+                    <a-button type="text" status="danger" size="small" @click="handleDeleteMemoryDisk(record.path)">{{ t('delete') }}</a-button>
+                </template>
+              </a-table>
+              <a-empty v-else :description="t('noMemoryDisk')" />
+            </a-tab-pane>
+
+            <a-tab-pane key="hosts" :title="'Hosts'">
+              <a-space style="margin-bottom: 16px;">
+                <a-button size="small" type="primary" @click="showHostsModal = true; hostsForm.domain = ''; hostsForm.ip = ''">{{ t('addHost') }}</a-button>
+              </a-space>
+              <a-table :data="hostsList" :columns="hostsColumns" :pagination="false" size="small" v-if="hostsList.length > 0">
+                <template #action="{ record }">
+                    <a-space>
+                      <a-button type="text" size="small" @click="hostsForm.domain = record.domain; hostsForm.ip = record.ip; showHostsModal = true">{{ t('edit') }}</a-button>
+                      <a-button type="text" size="small" @click="handleToggleHosts(record.domain, record.status === 1 ? 'pause' : 'resume')">
+                        {{ record.status === 1 ? t('pause') : t('resume') }}
+                      </a-button>
+                      <a-button type="text" status="danger" size="small" @click="handleDeleteHosts(record.domain)">{{ t('delete') }}</a-button>
+                    </a-space>
+                </template>
+              </a-table>
+              <a-empty v-else :description="t('noHosts')" />
+            </a-tab-pane>
+
+          </a-tabs>
         </a-tab-pane>
       </a-tabs>
     </div>
@@ -233,17 +339,58 @@
       </a-form-item>
       <p class="entrance-hint">{{ t('entranceHelper') }}</p>
     </a-modal>
-  </a-card>
-</template>
+
+    <!-- 内存盘创建对话框 -->
+    <a-modal v-model:visible="showMemoryDiskModal" :title="t('createMemoryDisk')" @ok="handleCreateMemoryDisk" @cancel="showMemoryDiskModal = false">
+      <a-form layout="vertical" :model="memoryDiskForm">
+        <a-form-item :label="t('path')" required>
+          <a-input v-model="memoryDiskForm.path" placeholder="/tmp/mydisk">
+            <template #suffix>
+              <icon-folder
+                style="cursor: pointer; color: #165DFF;"
+                @click="showMiniFileManager = true"
+              />
+            </template>
+          </a-input>
+        </a-form-item>
+        <a-form-item :label="t('size') + ' (MB)'" required>
+          <a-input-number v-model="memoryDiskForm.size" :min="1" :max="8192" style="width: 100%;" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- Hosts 添加/编辑对话框 -->
+    <a-modal v-model:visible="showHostsModal" :title="hostsForm.domain ? t('editHost') : t('addHost')" @ok="handleSaveHosts" @cancel="showHostsModal = false">
+      <a-form layout="vertical" :model="hostsForm">
+        <a-form-item :label="t('domain')" required>
+          <a-input v-model="hostsForm.domain" placeholder="example.com" />
+        </a-form-item>
+        <a-form-item :label="'IP'" required>
+          <a-input v-model="hostsForm.ip" placeholder="127.0.0.1" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- MiniFileManager 路径选择 -->
+    <MiniFileManager
+      :visible="showMiniFileManager"
+      :initial-path="memoryDiskForm.path || '/'"
+      select-mode="directory"
+      @update:visible="showMiniFileManager = $event"
+      @select="handleMiniFileManagerSelect"
+    />
+
+ </template>
 
 <script setup>
 import { reactive, onMounted, computed, ref } from 'vue';
 import { t, changeLocale, getCurrentLocale } from '../../utils/locale'
 import { Message} from '@arco-design/web-vue';
-import { IconLink, IconUpload } from '@arco-design/web-vue/es/icon';
-import { getEnvConfig, updateEnvConfig, restartService, getSSLCert, updateSSLCert } from '../../api/system';
+import { IconLink, IconUpload, IconFolder } from '@arco-design/web-vue/es/icon';
+import { getEnvConfig, updateEnvConfig, restartService, getSSLCert, updateSSLCert, getSystemSettings, setDNS, testDNS, setSwap, setTimezone, syncTime, setSystemPassword, createMemoryDisk, deleteMemoryDisk, addHosts, deleteHosts, toggleHosts } from '../../api/system';
 // 导入用户状态和函数
 import { isAdmin, fetchCurrentUser as fetchCurrentUserStore } from '../../stores/user';
+import MiniFileManager from '../../components/file/MiniFileManager.vue';
 
 const formState = reactive({
   closePanel: false,
@@ -264,7 +411,8 @@ const systemConfig = reactive({
   HOST: '0.0.0.0',
   PORT: 8000, // 确保默认值是数字类型
   SSL_ENABLED: false,
-  SECURITY_ENTRANCE: ''
+  SECURITY_ENTRANCE: '',
+  DOMAIN_BINDING: ''
 });
 
 // 当前用户信息（保留用于兼容性，实际使用store中的currentUser）
@@ -452,6 +600,9 @@ const fetchSystemConfig = async () => {
     if (configs.SECURITY_ENTRANCE !== undefined) {
       systemConfig.SECURITY_ENTRANCE = configs.SECURITY_ENTRANCE;
     }
+    if (configs.DOMAIN_BINDING !== undefined) {
+      systemConfig.DOMAIN_BINDING = configs.DOMAIN_BINDING;
+    }
     
     // 更新用户界面配置（从API获取）
     if (configs.LANGUAGE !== undefined) {
@@ -487,6 +638,243 @@ const fetchSystemConfig = async () => {
   }
 };
 
+// ==================== 服务器设置（系统设置）====================
+
+const serverForms = reactive({
+  dns: { dns1: '', dns2: '' },
+  swap: { size: 0 },
+  timezone: { area: 'Asia', zone: 'Shanghai' },
+  password: { user: 'root', password: '', confirmPassword: '' }
+})
+
+const showMemoryDiskModal = ref(false)
+const showHostsModal = ref(false)
+const showMiniFileManager = ref(false)
+const memoryDiskForm = reactive({ path: '', size: 256 })
+const hostsForm = reactive({ domain: '', ip: '' })
+
+const timezoneZoneList = ref([])
+const memoryDiskList = ref([])
+const hostsList = ref([])
+
+const swapInfoText = computed(() => {
+  const s = serverForms.swap
+  return `Total: ${s._total || 0} MB, Used: ${s._used || 0} MB, Free: ${s._free || 0} MB`
+})
+
+const serverTimezoneText = computed(() => {
+  return `${serverForms.timezone.area}/${serverForms.timezone.zone} (${serverForms.timezone._date || ''})`
+})
+
+const currentZoneList = computed(() => {
+  const area = serverForms.timezone.area
+  const found = timezoneZoneList.value.find(item => item.area === area)
+  return found ? found.zones : []
+})
+
+const memoryDiskColumns = computed(() => [
+  { title: t.value('path'), dataIndex: 'path' },
+  { title: t.value('size'), dataIndex: 'sizeText' },
+  { title: t.value('action'), slotName: 'action', width: 100 }
+])
+
+const hostsColumns = computed(() => [
+  { title: t.value('domainName'), dataIndex: 'domain' },
+  { title: 'IP', dataIndex: 'ip' },
+  { title: t.value('status'), dataIndex: 'statusText' },
+  { title: t.value('action'), slotName: 'action', width: 180 }
+])
+
+const fetchServerSettings = async () => {
+  try {
+    const res = await getSystemSettings()
+    // DNS
+    if (res.dns) {
+      serverForms.dns.dns1 = res.dns.dns1 || ''
+      serverForms.dns.dns2 = res.dns.dns2 || ''
+    }
+    // Swap
+    if (res.swap) {
+      serverForms.swap._total = res.swap.total || 0
+      serverForms.swap._used = res.swap.used || 0
+      serverForms.swap._free = res.swap.free || 0
+      serverForms.swap.size = res.swap.size ? Math.round(res.swap.size / 1024 / 1024) : 0
+    }
+    // Timezone
+    if (res.timezone) {
+      serverForms.timezone.area = res.timezone.current_area || 'Asia'
+      serverForms.timezone.zone = res.timezone.current_zone || 'Shanghai'
+      serverForms.timezone._date = res.timezone.date || ''
+      if (res.timezone.zone_list) {
+        timezoneZoneList.value = res.timezone.zone_list
+      }
+    }
+    // Hosts
+    if (res.hosts) {
+      hostsList.value = Object.values(res.hosts).map(item => ({
+        ...item,
+        statusText: item.status === 1 ? 'Enabled' : 'Disabled',
+        ip: item.ip || item.domain
+      }))
+    }
+    // Memory disk
+    if (res.memory_disk) {
+      const mountInfo = res.memory_disk.mount_info || {}
+      memoryDiskList.value = Object.keys(mountInfo).map(path => ({
+        path,
+        ...mountInfo[path],
+        sizeText: mountInfo[path].size ? `${mountInfo[path].size} MB` : '-'
+      }))
+    }
+  } catch (error) {
+    console.error('获取系统设置失败:', error)
+    Message.error(t.value('getConfigFailed'))
+  }
+}
+
+// DNS
+const handleSaveDNS = async () => {
+  try {
+    const res = await setDNS({ dns1: serverForms.dns.dns1, dns2: serverForms.dns.dns2 })
+    Message.success(res.message || 'DNS设置成功')
+  } catch (error) {
+    Message.error(error.message || 'DNS设置失败')
+  }
+}
+
+const handleTestDNS = async () => {
+  try {
+    const res = await testDNS({ dns1: serverForms.dns.dns1, dns2: serverForms.dns.dns2 })
+    if (res.status) {
+      Message.success(res.message || 'DNS可用')
+    } else {
+      Message.warning(res.message || 'DNS不可用')
+    }
+  } catch (error) {
+    Message.error(error.message || 'DNS测试失败')
+  }
+}
+
+// Swap
+const handleSaveSwap = async () => {
+  try {
+    const res = await setSwap({ size: serverForms.swap.size })
+    Message.success(res.message || 'Swap设置成功')
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || 'Swap设置失败')
+  }
+}
+
+// Timezone
+const handleSaveTimezone = async () => {
+  try {
+    const res = await setTimezone({ area: serverForms.timezone.area, zone: serverForms.timezone.zone })
+    Message.success(res.message || '时区设置成功')
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || '时区设置失败')
+  }
+}
+
+const handleSyncTime = async () => {
+  try {
+    const res = await syncTime()
+    Message.success(res.message || '时间同步成功')
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || '时间同步失败')
+  }
+}
+
+// Password
+const handleSavePassword = async () => {
+  if (serverForms.password.password !== serverForms.password.confirmPassword) {
+    Message.error(t('passwordMismatch'))
+    return
+  }
+  try {
+    const res = await setSystemPassword({
+      user: serverForms.password.user,
+      password: serverForms.password.password,
+      confirm_password: serverForms.password.confirmPassword
+    })
+    Message.success(res.message || '密码修改成功')
+    serverForms.password.password = ''
+    serverForms.password.confirmPassword = ''
+  } catch (error) {
+    Message.error(error.message || '密码修改失败')
+  }
+}
+
+// Memory disk
+const handleCreateMemoryDisk = async () => {
+  if (!memoryDiskForm.path) {
+    Message.error('请填写路径')
+    return
+  }
+  try {
+    const res = await createMemoryDisk({ path: memoryDiskForm.path, size: memoryDiskForm.size })
+    Message.success(res.message || '内存盘创建成功')
+    showMemoryDiskModal.value = false
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || '创建内存盘失败')
+  }
+}
+
+const handleMiniFileManagerSelect = (data) => {
+  if (data.path) {
+    memoryDiskForm.path = data.path
+  }
+  showMiniFileManager.value = false
+}
+
+const handleDeleteMemoryDisk = async (path) => {
+  try {
+    const res = await deleteMemoryDisk({ path })
+    Message.success(res.message || '内存盘删除成功')
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || '删除内存盘失败')
+  }
+}
+
+// Hosts
+const handleSaveHosts = async () => {
+  if (!hostsForm.domain || !hostsForm.ip) {
+    Message.error('请填写完整信息')
+    return
+  }
+  try {
+    const res = await addHosts({ domain: hostsForm.domain, ip: hostsForm.ip })
+    Message.success(res.message || 'Hosts保存成功')
+    showHostsModal.value = false
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || 'Hosts保存失败')
+  }
+}
+
+const handleDeleteHosts = async (domain) => {
+  try {
+    const res = await deleteHosts({ domain })
+    Message.success(res.message || 'Hosts删除成功')
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || 'Hosts删除失败')
+  }
+}
+
+const handleToggleHosts = async (domain, act) => {
+  try {
+    const res = await toggleHosts({ domain, act })
+    Message.success(res.message || '操作成功')
+    await fetchServerSettings()
+  } catch (error) {
+    Message.error(error.message || '操作失败')
+  }
+}
 
 // 确认重启服务
 const confirmRestart = async () => {
@@ -1061,6 +1449,15 @@ const saveTimezone = async () => {
   }
 };
 
+const handleSaveDomainBinding = async () => {
+  try {
+    const response = await updateEnvConfig({ DOMAIN_BINDING: systemConfig.DOMAIN_BINDING });
+    Message.success('域名绑定设置成功');
+  } catch (error) {
+    Message.error('域名绑定设置失败: ' + (error.message || t.value('unknownError')));
+  }
+};
+
 // 组件挂载时设置当前语言和主题
 onMounted(() => {
   // 先设置默认值，稍后会被API返回的值覆盖
@@ -1069,6 +1466,7 @@ onMounted(() => {
   // 获取当前用户信息和系统配置（优先从API获取配置）
   fetchCurrentUser().then(() => {
     fetchSystemConfig();
+    fetchServerSettings();
   });
 });
 
@@ -1272,5 +1670,27 @@ const saveSettings = () => {
   font-size: 12px;
   margin: -10px 0 10px 100px;
   line-height: 1.4;
+}
+
+/* 服务器设置标签页布局 */
+.server-tabs {
+  min-height: 400px;
+}
+
+:deep(.server-tabs .arco-tabs-content) {
+  padding: 8px 20px;
+}
+
+:deep(.server-tabs .arco-tabs-content-inner) {
+  padding-top: 0;
+}
+
+:deep(.server-tabs .arco-form-item) {
+  margin-bottom: 16px;
+}
+
+/* 空状态居中 */
+:deep(.arco-empty) {
+  padding: 20px 0;
 }
 </style>

@@ -122,7 +122,7 @@ const columns = computed(() => [
     width: 150
   },
   {
-    title: t.value('domain'),
+    title: t.value('domainName'),
     dataIndex: 'domain',
     slotName: 'domain',
     width: 200

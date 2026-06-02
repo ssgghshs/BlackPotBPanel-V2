@@ -97,6 +97,9 @@
               {{ localSiteInfo.upstream_server || '-' }}
             </a-card>
             <a-card v-if="localSiteInfo.type === 'Static Site' || localSiteInfo.type === 'PHP Site'" :title="t('staticFilePath')"> 
+              <template #extra>
+                <a-button size="small" type="outline" @click="openFileManager(localSiteInfo.upstream_server)">{{ t('browse') }}</a-button>
+              </template>
               {{ localSiteInfo.upstream_server || '-' }}
             </a-card>
             <a-card v-if="localSiteInfo.type === 'PHP Site'" :title="t('phpFpmHost')"> 
@@ -316,14 +319,22 @@
       </a-form>
     </a-modal>
   </a-drawer>
+
+  <!-- 文件管理器组件 -->
+  <file-cat2
+    :visible="showFileManager"
+    :initial-path="selectedFilePath"
+    @update:visible="(val) => { showFileManager = val }"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
-import { t } from '../../utils/locale';
-import { updateBasicSiteConfig, updateSiteSSLConfig, updateSiteProtectionConfig, getSSLCertList } from '../../api/waf';
+import { t } from '../../utils/locale.js';
+import { updateBasicSiteConfig, updateSiteSSLConfig, updateSiteProtectionConfig, getSSLCertList } from '../../api/waf.js';
 import { Message } from '@arco-design/web-vue';
 import SiteConfigFile from './SiteConfigFile.vue';
+import FileCat2 from '../file/FileCat2.vue';
 
 const props = defineProps({
   visible: {
@@ -383,6 +394,16 @@ const sslForm = ref({
   cert_name: ''
 });
 const sslCertList = ref([]);
+
+// 文件管理器状态
+const showFileManager = ref(false);
+const selectedFilePath = ref('');
+
+// 打开文件管理器
+const openFileManager = (path) => {
+  selectedFilePath.value = path;
+  showFileManager.value = true;
+};
 
 // 计算属性
 const protectionStatus = computed(() => {

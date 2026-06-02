@@ -1,10 +1,5 @@
 <template>
-  <a-card class="containers-container">
-    <template #title>
-      <div class="card-header">
-        <span class="title">{{ t('overview') }}</span>
-      </div>
-    </template>
+
 
 <!-- 内容区域  -->
   <!-- 3:7 -->
@@ -108,7 +103,6 @@
       </div>
     </div>
   </div>
-  </a-card>
 </template>
 
 <script setup>
