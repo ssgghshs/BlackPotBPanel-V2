@@ -1,4 +1,8 @@
-![favicon](images/favicon.ico)
+<p align="center">
+  <img src="./images/favicon.ico" width="120" alt="BlackPotBPanel V2" />
+</p>
+
+
 # BlackPotBPanel V2
 BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面板，写的比较垃圾，只实现了一些基本功能，后续可能会继续完善。
 
