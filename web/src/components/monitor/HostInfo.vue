@@ -34,6 +34,7 @@ import Kylin from '../icon/osicon/Kylin.vue'
 import Rocky from '../icon/osicon/Rocky.vue'
 import Uos from '../icon/osicon/Uos.vue'
 import Linux from '../icon/osicon/Linux.vue'
+import OpenCloud from '../icon/osicon/OpenCloud.vue'
 
 
 
@@ -50,6 +51,7 @@ function detectOsIcon(version) {
   if (v.includes('kylin')) return Kylin
   if (v.includes('rocky')) return Rocky
   if (v.includes('uos')) return Uos
+  if (v.includes('opencloud')) return OpenCloud
   return Linux
 }
 
