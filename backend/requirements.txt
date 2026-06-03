@@ -24,6 +24,6 @@ pyOpenSSL==23.0.0
 pymysql==1.2.0
 psycopg2-binary>=2.9.10,<3
 pyotp
-qrcode==7.1.0
+qrcode[pil]
 
 
