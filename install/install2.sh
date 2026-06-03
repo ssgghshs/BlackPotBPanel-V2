@@ -376,11 +376,13 @@ TIMEZONE=Asia/Shanghai
 
 # API Documentation
 ENABLE_DOCS=False
+API_OPEN=False
 
 # General Settings
 LANGUAGE=$CFG_LANGUAGE
 THEME=dark
 LOGIN_NOTIFY=True
+LOGIN_LIMIT=True
 RECYCLE=True
 
 # Server Settings

@@ -376,11 +376,14 @@ TIMEZONE=Asia/Shanghai
 
 # API文档配置
 ENABLE_DOCS=False
+API_OPEN=False
+
 
 # 通用设置
 LANGUAGE=$CFG_LANGUAGE
 THEME=dark
 LOGIN_NOTIFY=True
+LOGIN_LIMIT=True
 RECYCLE=True
 
 # 服务器配置
