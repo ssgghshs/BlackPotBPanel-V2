@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 import time
 from typing import List, Dict, Any, Optional, Tuple
 from fastapi import UploadFile
-import httpx
 import uuid
 import re
 
@@ -29,6 +28,9 @@ RECYCLE_PATH = settings.RECYCLE_PATH
 
 # 存储下载任务的全局变量
 download_tasks = {}
+
+# 跟踪 wget 进程，用于真正取消下载
+download_processes = {}
 
 # 创建全局线程池执行器
 executor = ThreadPoolExecutor(max_workers=4)
@@ -1880,12 +1882,10 @@ def _sync_get_directory_size(path: str) -> int:
 
 # 后台下载任务函数
 async def background_download_task(download_id: str, url: str, destination_path: str, filename: str = "", verify_ssl: bool = True):
-    """后台执行下载任务"""
+    """后台执行下载任务（使用系统 wget 命令）"""
     try:
         from urllib.parse import urlparse
         import time
-        # 延迟导入httpx以避免导入错误
-        import httpx
         
         # 初始化进度
         download_tasks[download_id] = {
@@ -1936,47 +1936,73 @@ async def background_download_task(download_id: str, url: str, destination_path:
         # 创建目标目录（如果不存在）
         os.makedirs(destination_path, exist_ok=True)
         
-        # 设置请求头，模拟浏览器请求
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        }
-        
         # 更新进度状态
         download_tasks[download_id]["status"] = "downloading"
         
-        # 使用异步HTTP客户端下载文件，根据verify_ssl参数决定是否验证SSL证书
-        async with httpx.AsyncClient(headers=headers, timeout=300.0, verify=verify_ssl) as client:
-            async with client.stream("GET", url) as response:
-                response.raise_for_status()  # 检查HTTP错误
-                
-                # 获取文件总大小
-                total_size = int(response.headers.get('content-length', 0))
-                download_tasks[download_id]["total_size"] = total_size
-                
-                # 保存文件
-                downloaded_size = 0
-                with open(full_destination_path, "wb") as f:
-                    async for chunk in response.aiter_bytes(chunk_size=8192):
-                        f.write(chunk)
-                        downloaded_size += len(chunk)
-                        # 更新进度
-                        if total_size > 0:
-                            progress = int((downloaded_size / total_size) * 100)
-                            download_tasks[download_id]["progress"] = min(progress, 100)
-                        download_tasks[download_id]["downloaded_size"] = downloaded_size
+        # 构建 wget 命令（同宝塔做法）
+        cmd = [
+            "wget", "-O", full_destination_path, url,
+            "-T", "30",     # 超时 30 秒
+            "-t", "5",      # 重试 5 次
+            "--progress=dot:giga",  # 点状进度，每行一条
+        ]
+        if not verify_ssl:
+            cmd.append("--no-check-certificate")
         
-        # 更新进度状态为完成
-        download_tasks[download_id]["status"] = "completed"
-        download_tasks[download_id]["progress"] = 100
-        download_tasks[download_id]["completed_at"] = datetime.now()
+        # 启动 wget 进程
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        download_processes[download_id] = process
         
+        # 从 stderr 读取进度
+        total_size = 0
+        async for raw_line in process.stderr:
+            line = raw_line.decode("utf-8", errors="ignore").strip()
+            # 解析 "Length: 10485760 (10M)" 获取总大小
+            if line.startswith("Length:"):
+                m = re.search(r'Length:\s*(\d+)', line)
+                if m:
+                    total_size = int(m.group(1))
+                    download_tasks[download_id]["total_size"] = total_size
+            # 解析进度百分比 " 50% [..........] 5.2M 5s"
+            # dot:giga 格式: " 12345K ........ .......... ..........  12% 1.00M 5s"
+            m = re.search(r'(\d+)%[\s\S]*$', line)
+            if m:
+                progress = int(m.group(1))
+                download_tasks[download_id]["progress"] = min(progress, 100)
+                if total_size > 0:
+                    download_tasks[download_id]["downloaded_size"] = int(total_size * progress / 100)
+        
+        await process.wait()
+        
+        # 清理进程记录
+        if download_id in download_processes:
+            del download_processes[download_id]
+        
+        if process.returncode == 0:
+            # 下载完成
+            download_tasks[download_id]["status"] = "completed"
+            download_tasks[download_id]["progress"] = 100
+            download_tasks[download_id]["downloaded_size"] = os.path.getsize(full_destination_path)
+            download_tasks[download_id]["total_size"] = os.path.getsize(full_destination_path)
+            download_tasks[download_id]["completed_at"] = datetime.now()
+        else:
+            # wget 返回非零，从 stderr 获取错误信息
+            error_msg = f"wget 下载失败，返回码: {process.returncode}"
+            download_tasks[download_id]["status"] = "error"
+            download_tasks[download_id]["error"] = error_msg
+            download_tasks[download_id]["completed_at"] = datetime.now()
+        
+    except FileNotFoundError:
+        # wget 命令不存在
+        if download_id in download_tasks:
+            download_tasks[download_id]["status"] = "error"
+            download_tasks[download_id]["error"] = "系统未安装 wget，请先安装: yum install wget 或 apt install wget"
+            download_tasks[download_id]["completed_at"] = datetime.now()
     except Exception as e:
-        # 更新进度状态为错误
         if download_id in download_tasks:
             download_tasks[download_id]["status"] = "error"
             download_tasks[download_id]["error"] = str(e)
@@ -2051,15 +2077,21 @@ async def cancel_download_task(download_id: str) -> bool:
     """取消下载任务（终止下载）"""
     if download_id in download_tasks:
         task_info = download_tasks[download_id]
-        # 如果任务正在进行中，将其标记为已取消
-        if task_info["status"] == "downloading":
+        
+        # 如果任务正在进行，kill wget 进程
+        if task_info["status"] in ("downloading", "starting"):
+            # 终止 wget 进程
+            proc = download_processes.pop(download_id, None)
+            if proc:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass  # 进程可能已结束
+            
             task_info["status"] = "cancelled"
             task_info["completed_at"] = datetime.now()
             task_info["error"] = "下载任务已被用户取消"
-        # 如果任务已启动但未开始下载，直接移除
-        elif task_info["status"] == "starting":
-            del download_tasks[download_id]
-        # 对于已完成、错误或已取消的任务，不进行任何操作
+        
         return True
     return False
 

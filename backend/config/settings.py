@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     #TTF字体路径
     TTF_FONT_PATH: str = "./data/ttf/DejaVuSans.ttf"
     API_CONFIG_PATH: str = "./data/api.json"
+    # 授权 IP 配置
+    ALLOW_IPS_CONFIG_PATH: str = "./data/allow_ips.json"
 
     
     # 基础路径

@@ -91,6 +91,11 @@
                 <a-button type="primary" size="small" style="margin-left: 10px;" @click="handleSaveDomainBinding">{{ t('save') }}</a-button>
               </a-form-item>
               <a-alert type="warning" show-icon  :closable="false" style="margin: -8px 0 8px 130px;">{{ t('domainBindingNote') }}</a-alert>
+              <a-form-item :label="t('allowIPs') + ':'" class="form-item">
+                <a-input v-model="systemConfig.ALLOW_IPS" :placeholder="t('allowIPsPlaceholder')" />
+                <a-button type="primary" size="small" style="margin-left: 10px;" @click="handleSaveAllowIPs">{{ t('save') }}</a-button>
+              </a-form-item>
+              <a-alert type="warning" show-icon :closable="false" style="margin: -8px 0 8px 130px;">{{ t('allowIPsNote') }}</a-alert>
               <a-form-item :label="t('apiInterface') + ':'" class="form-item">
                 <a-switch v-model="systemConfig.API_OPEN" @change="handleSaveApiOpen" />
                 <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3);">{{ t('apiInterfaceNote') }}</span>
@@ -439,6 +444,7 @@ const systemConfig = reactive({
   SSL_ENABLED: false,
   SECURITY_ENTRANCE: '',
   DOMAIN_BINDING: '',
+  ALLOW_IPS: '',
   API_OPEN: true,
   API_KEY: '',
   API_IP_WHITELIST: '127.0.0.1',
@@ -640,6 +646,9 @@ const fetchSystemConfig = async () => {
     }
     if (configs.DOMAIN_BINDING !== undefined) {
       systemConfig.DOMAIN_BINDING = configs.DOMAIN_BINDING;
+    }
+    if (configs.ALLOW_IPS !== undefined) {
+      systemConfig.ALLOW_IPS = configs.ALLOW_IPS;
     }
     if (configs.API_OPEN !== undefined) {
       systemConfig.API_OPEN = configs.API_OPEN === 'True' || configs.API_OPEN === true;
@@ -1501,6 +1510,15 @@ const saveTimezone = async () => {
 const handleSaveDomainBinding = async () => {
   try {
     const response = await updateEnvConfig({ DOMAIN_BINDING: systemConfig.DOMAIN_BINDING });
+    Message.success(t.value('configSaveSuccess'));
+  } catch (error) {
+    Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')));
+  }
+};
+
+const handleSaveAllowIPs = async () => {
+  try {
+    await updateEnvConfig({ ALLOW_IPS: systemConfig.ALLOW_IPS });
     Message.success(t.value('configSaveSuccess'));
   } catch (error) {
     Message.error(t.value('configSaveFailed') + ': ' + (error.message || t.value('unknownError')));

@@ -1,5 +1,6 @@
 # app/__init__.py
 import base64
+import json
 import os
 import logging
 
@@ -7,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.responses import HTMLResponse
+import ipaddress
 
 from app.user.routers import router as user_router
 from app.system.routers import router as system_router
@@ -55,6 +57,20 @@ def _read_domain_binding() -> str:
                 if line.startswith("DOMAIN_BINDING="):
                     val = line.split("=", 1)[1].strip()
                     return val
+    return ""
+
+
+def _read_allow_ips() -> str:
+    """从 allow_ips.json 动态读取授权 IP 配置"""
+    path = config.settings.settings.ALLOW_IPS_CONFIG_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data.get("ALLOW_IPS", "")
+        except (json.JSONDecodeError, IOError):
+            pass
     return ""
 
 
@@ -138,6 +154,47 @@ def create_app():
 
 
     api_prefix = "/api/v2"
+
+    # ─── 授权 IP 中间件 ───
+    # 必须最先注册，配置为空时不限制
+    @app.middleware("http")
+    async def ip_whitelist_middleware(request: Request, call_next):
+        allow_ips = _read_allow_ips()
+        if not allow_ips:
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else ""
+        if not client_ip:
+            return await call_next(request)
+
+        # 支持逗号分隔的 IP 或 CIDR，也兼容中文逗号
+        parts = [p.strip() for p in allow_ips.replace("，", ",").split(",") if p.strip()]
+        for entry in parts:
+            try:
+                if "/" in entry:
+                    network = ipaddress.ip_network(entry, strict=False)
+                    if ipaddress.ip_address(client_ip) in network:
+                        return await call_next(request)
+                else:
+                    if client_ip == entry:
+                        return await call_next(request)
+            except ValueError:
+                continue
+
+        return HTMLResponse(
+            status_code=403,
+            content=f"""<!DOCTYPE html>
+<html>
+<head><title>403</title></head>
+<body>
+<center>
+<h1>Forbidden - Your IP is not allowed</h1>
+<p>Your IP: {client_ip}</p>
+</center>
+<hr><center>Blackpotbpanel/2.0</center>
+</body>
+</html>"""
+        )
 
     # ─── 域名绑定中间件 ───
     # 无条件注册，内部动态读取配置判断是否启用

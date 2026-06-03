@@ -21,7 +21,7 @@ ADMIN_CONFIG_FIELDS = [
     'DATABASE_URL', 'APP_NAME', 'VERSION', 'DEBUG', 'SECRET_KEY', 
     'ALGORITHM', 'ACCESS_TOKEN_EXPIRE_MINUTES', 'TIMEZONE', 'ENABLE_DOCS',
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
-    'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING',
+    'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING', 'ALLOW_IPS',
     'API_OPEN', 'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME',
 ]
 USER_CONFIG_FIELDS = ['APP_NAME', 'VERSION', 'TIMEZONE', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
@@ -31,7 +31,7 @@ ADMIN_CONFIG_EDITABLE = [
     'DATABASE_URL', 'APP_NAME', 'DEBUG', 'SECRET_KEY', 
     'ALGORITHM', 'ACCESS_TOKEN_EXPIRE_MINUTES', 'TIMEZONE', 'ENABLE_DOCS',
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
-    'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING',
+    'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING', 'ALLOW_IPS',
     'API_OPEN', 'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME',
 ]
 USER_CONFIG_EDITABLE = ['APP_NAME', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
@@ -99,6 +99,16 @@ def write_env_file(configs: Dict[str, str]) -> None:
     with open(ENV_FILE_PATH, 'w', encoding='utf-8') as f:
         f.writelines(updated_lines)
 
+
+def _write_allow_ips_config(allow_ips: str) -> None:
+    """写入授权 IP 配置到 allow_ips.json"""
+    from config.settings import settings
+    path = settings.ALLOW_IPS_CONFIG_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"ALLOW_IPS": allow_ips}, f, indent=2, ensure_ascii=False)
+
+
 async def get_env_config(user_role: str) -> Dict[str, str]:
     """
     获取环境配置
@@ -121,6 +131,18 @@ async def get_env_config(user_role: str) -> Dict[str, str]:
             configs["API_IP_WHITELIST"] = api_cfg["API_IP_WHITELIST"]
         if api_cfg.get("API_KEY_VALIDITY_TIME") is not None:
             configs["API_KEY_VALIDITY_TIME"] = str(api_cfg["API_KEY_VALIDITY_TIME"])
+        
+        # 合并 allow_ips.json 中的配置
+        from config.settings import settings
+        allow_ips_path = settings.ALLOW_IPS_CONFIG_PATH
+        if os.path.exists(allow_ips_path):
+            try:
+                with open(allow_ips_path, "r", encoding="utf-8") as f:
+                    allow_data = json.load(f)
+                    if isinstance(allow_data, dict) and allow_data.get("ALLOW_IPS"):
+                        configs["ALLOW_IPS"] = allow_data["ALLOW_IPS"]
+            except (json.JSONDecodeError, IOError):
+                pass
         
         # 根据用户角色过滤配置项
         if user_role == "ADMIN":
@@ -159,12 +181,16 @@ async def update_env_config(config_data: schemas.EnvConfigUpdate, user_role: str
         # 更新配置
         update_data = config_data.model_dump(exclude_unset=True)
         api_json_fields = {'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME'}
+        allow_ips_json_fields = {'ALLOW_IPS'}
         api_json_updates = {}
+        allow_ips_json_updates = {}
 
         for key, value in update_data.items():
             if key in allowed_fields and value is not None:
                 if key in api_json_fields:
                     api_json_updates[key] = value
+                elif key in allow_ips_json_fields:
+                    allow_ips_json_updates[key] = value
                 else:
                     current_configs[key] = str(value)
 
@@ -178,6 +204,10 @@ async def update_env_config(config_data: schemas.EnvConfigUpdate, user_role: str
             for k, v in api_json_updates.items():
                 api_cfg[k] = v
             _write_api_config(api_cfg)
+
+        # 写入 allow_ips.json（ALLOW_IPS）
+        if allow_ips_json_updates:
+            _write_allow_ips_config(allow_ips_json_updates.get("ALLOW_IPS", ""))
 
         # 根据用户角色过滤返回的配置项
         if user_role == "ADMIN":

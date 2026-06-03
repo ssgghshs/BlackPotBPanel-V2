@@ -823,19 +823,6 @@ async def get_download_task(download_id: str, current_user = Depends(get_current
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/download_progress/{download_id}")
-async def get_download_progress(download_id: str, current_user = Depends(get_current_active_user)):
-    """获取指定下载ID的进度信息"""
-    try:
-        progress = await service.get_download_task(download_id)
-        return {
-            "code": 200,
-            "message": "进度获取成功",
-            "data": progress
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/download_task/{download_id}")
 async def cancel_and_delete_download_task(download_id: str, current_user = Depends(get_current_active_user)):
