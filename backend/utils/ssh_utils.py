@@ -691,6 +691,11 @@ class SSHLogReader:
     def parse_ssh_log_entry(log_line: str) -> dict:
         """解析单行SSH日志条目
         
+        支持两种时间戳格式：
+        - ISO 8601: 2026-06-03T16:32:04.571038+08:00 (journalctl)
+        - 传统 syslog: Jun  3 16:28:52 (/var/log/secure)
+        也支持两种进程名: sshd[pid] 和 sshd-session[pid]
+        
         Args:
             log_line: 日志行字符串
             
@@ -698,45 +703,44 @@ class SSHLogReader:
             dict: 解析后的日志条目字典，如果不是SSH登录日志则返回None
         """
         
+        # 通用时间戳模式：匹配 ISO 8601 或 syslog 格式
+        ts_pattern = r'(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+)'
+        # 进程名: sshd 或 sshd-session
+        proc_pattern = r'sshd(?:-session)?\[\d+\]'
+        
         # 尝试解析成功登录
-        success_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+[^\s]+\s+sshd(-\w+)?\[\d+\]:\s+Accepted\s+(password|publickey)\s+for\s+(\w+)\s+from\s+([\d\.]+)\s+port\s+(\d+)'
+        success_pattern = r'(' + ts_pattern + r')\s+[^\s]+\s+' + proc_pattern + r':\s+Accepted\s+(password|publickey)\s+for\s+(\w+)\s+from\s+([\d\.]+)\s+port\s+(\d+)'
         success_match = re.search(success_pattern, log_line)
         
         if success_match:
-            # 获取原始时间字符串
             raw_time = success_match.group(1)
-            # 添加当前年份并重新格式化
-            current_year = datetime.datetime.now().year
-            formatted_time = SSHLogReader._format_log_time(raw_time, current_year)
+            formatted_time = SSHLogReader._format_log_time(raw_time)
             
             return {
                 "time": formatted_time,
-                "method": success_match.group(3),
-                "username": success_match.group(4),
-                "ip": success_match.group(5),
-                "port": success_match.group(6),
+                "method": success_match.group(2),
+                "username": success_match.group(3),
+                "ip": success_match.group(4),
+                "port": success_match.group(5),
                 "status": "success",
                 "raw": log_line
             }
         
         # 尝试解析失败登录
-        failed_pattern = r'(\w+\s+\d+\s+\d+:\d+:\d+)\s+[^\s]+\s+sshd(-\w+)?\[\d+\]:\s+Failed\s+(password|publickey)\s+for\s+(invalid\s+user\s+)?(\w+)?\s+from\s+([\d\.]+)\s+port\s+(\d+)'
+        failed_pattern = r'(' + ts_pattern + r')\s+[^\s]+\s+' + proc_pattern + r':\s+Failed\s+(password|publickey)\s+for\s+(?:invalid\s+user\s+)?(\w+)?\s+from\s+([\d\.]+)\s+port\s+(\d+)'
         failed_match = re.search(failed_pattern, log_line)
         
         if failed_match:
-            username = failed_match.group(5) if failed_match.group(5) else "invalid"
-            # 获取原始时间字符串
+            username = failed_match.group(3) if failed_match.group(3) else "invalid"
             raw_time = failed_match.group(1)
-            # 添加当前年份并重新格式化
-            current_year = datetime.datetime.now().year
-            formatted_time = SSHLogReader._format_log_time(raw_time, current_year)
+            formatted_time = SSHLogReader._format_log_time(raw_time)
             
             return {
                 "time": formatted_time,
-                "method": failed_match.group(3),
+                "method": failed_match.group(2),
                 "username": username,
-                "ip": failed_match.group(6),
-                "port": failed_match.group(7),
+                "ip": failed_match.group(4),
+                "port": failed_match.group(5),
                 "status": "failed",
                 "raw": log_line
             }
@@ -800,25 +804,30 @@ class SSHLogReader:
             return [], 0
     
     @staticmethod
-    def _format_log_time(raw_time: str, year: int) -> str:
-        """将原始日志时间字符串格式化为带年份的标准格式
+    def _format_log_time(raw_time: str) -> str:
+        """将原始日志时间格式化为标准格式
         
-        Args:
-            raw_time: 原始时间字符串，格式如 "Nov 22 00:46:20"
-            year: 要添加的年份
-            
+        支持格式：
+        - ISO 8601: 2026-06-03T16:32:04.571038+08:00 → 2026-06-03 16:32:04
+        - syslog: Jun  3 16:28:52 → 2026-06-03 16:28:52
+        
         Returns:
-            str: 格式化后的时间字符串，格式如 "2025-11-22 00:46:20"
+            str: 格式化后的时间字符串 "YYYY-MM-DD HH:MM:SS"
         """
+        # 尝试解析 ISO 8601 格式（journalctl）
         try:
-            # 解析原始时间字符串
+            dt = datetime.datetime.fromisoformat(raw_time)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            pass
+        
+        # 尝试解析传统 syslog 格式
+        try:
+            current_year = datetime.datetime.now().year
             dt = datetime.datetime.strptime(raw_time, "%b %d %H:%M:%S")
-            # 添加年份
-            dt = dt.replace(year=year)
-            # 返回格式化后的时间字符串
+            dt = dt.replace(year=current_year)
             return dt.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
-            # 如果解析失败，返回原始时间字符串
             return raw_time
     
     @staticmethod
@@ -892,6 +901,67 @@ class SSHLogReader:
         except Exception as e:
             logger.error(f"使用命令行获取SSH登录日志失败: {e}")
             return [], 0
+    
+    @staticmethod
+    def get_ssh_logs_by_journalctl(start: int = 0, limit: int = 100, keyword: str = None, status: str = None) -> tuple[list, int]:
+        """使用 systemd-journalctl 获取SSH登录日志（适用于使用 systemd-journald 的系统）
+        
+        方案：
+        1. journalctl _COMM=sshd _COMM=sshd-session --no-pager --output=short-iso
+        2. 如果失败，尝试 journalctl -u sshd --no-pager --output=short-iso
+        3. 如果还失败，尝试 journalctl -u ssh.service --no-pager --output=short-iso
+        
+        Args:
+            start: 起始索引
+            limit: 返回条数限制
+            keyword: 搜索关键字
+            status: 状态过滤，可选值: 'success', 'failed', None
+            
+        Returns:
+            tuple[list, int]: (日志条目列表, 总条数)
+        """
+        journalctl_cmds = [
+            ["journalctl", "_COMM=sshd", "_COMM=sshd-session", "--no-pager", "--output=short-iso"],
+            ["journalctl", "-u", "sshd", "--no-pager", "--output=short-iso"],
+            ["journalctl", "-u", "ssh.service", "--no-pager", "--output=short-iso"],
+        ]
+        
+        for cmd in journalctl_cmds:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                if result.returncode == 0 and result.stdout.strip():
+                    log_lines = result.stdout.strip().split('\n')
+                    
+                    # 解析和过滤日志
+                    parsed_logs = []
+                    for line in reversed(log_lines):
+                        parsed = SSHLogReader.parse_ssh_log_entry(line.strip())
+                        if parsed:
+                            match_keyword = True
+                            match_status = True
+                            
+                            if keyword:
+                                match_keyword = (keyword.lower() in parsed['username'].lower() or 
+                                                keyword.lower() in parsed['ip'].lower())
+                            
+                            if status:
+                                match_status = (parsed['status'] == status)
+                            
+                            if match_keyword and match_status:
+                                parsed_logs.append(parsed)
+                    
+                    total = len(parsed_logs)
+                    paginated_logs = parsed_logs[start:start + limit]
+                    
+                    logger.info(f"journalctl 获取到 {total} 条 SSH 日志")
+                    return paginated_logs, total
+                    
+            except (subprocess.SubprocessError, FileNotFoundError) as e:
+                logger.warning(f"journalctl 命令失败: {cmd[0]} {' '.join(cmd[1:])} - {e}")
+                continue
+        
+        logger.warning("所有 journalctl 命令均失败")
+        return [], 0
     
     @staticmethod
     def clean_ssh_logs(before_date: str = None, keep_days: int = None) -> tuple[bool, str, int]:

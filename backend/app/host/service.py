@@ -456,12 +456,12 @@ async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
         # 使用skip参数直接作为起始索引
         start_index = query.skip
         
-        # 尝试使用直接读取文件的方式获取日志（异步方式）
+        # 方案1：优先使用 journalctl（适用于 systemd-journald 系统，如 OpenCloudOS 9+）
         loop = asyncio.get_event_loop()
         logs, total = await loop.run_in_executor(
             None, 
             functools.partial(
-                SSHLogReader.get_ssh_logs,
+                SSHLogReader.get_ssh_logs_by_journalctl,
                 start=start_index,
                 limit=query.limit,
                 keyword=query.info,
@@ -469,7 +469,21 @@ async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
             )
         )
         
-        # 如果直接读取文件失败（返回空列表），尝试使用命令行工具获取
+        # 方案2：如果 journalctl 没日志，尝试直接读取日志文件
+        if not logs:
+            logger.info("journalctl returned no logs, trying log file directly")
+            logs, total = await loop.run_in_executor(
+                None, 
+                functools.partial(
+                    SSHLogReader.get_ssh_logs,
+                    start=start_index,
+                    limit=query.limit,
+                    keyword=query.info,
+                    status=query.status
+                )
+            )
+        
+        # 方案3：如果直接读取文件失败（返回空列表），尝试使用命令行工具获取
         if not logs:
             logger.info("Try using command-line tools to retrieve SSH login logs")
             logs, total = await loop.run_in_executor(
