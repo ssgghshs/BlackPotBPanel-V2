@@ -41,6 +41,7 @@ BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面�
 | AnolisOS-8.0+ | ✅ |
 | AnolisOS-23.0+ | ✅ |
 | NingOS-v3 | ✅ |
+| OpenCloud 9 | ✅ |
 --------------
 其余操作系统可尝试手动安装
 
