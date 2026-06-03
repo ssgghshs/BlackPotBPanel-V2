@@ -61,7 +61,7 @@ class Settings(BaseSettings):
 
     #登录限制开关
     LOGIN_LIMIT: bool = True
-    
+
     # 安全入口（留空表示不启用）
     SECURITY_ENTRANCE: str = ""
     
@@ -83,7 +83,8 @@ class Settings(BaseSettings):
     API_CONFIG_PATH: str = "./data/api.json"
     # 授权 IP 配置
     ALLOW_IPS_CONFIG_PATH: str = "./data/allow_ips.json"
-
+    # MFA 配置
+    MFA_CONFIG_PATH: str = "./data/mfa.json"
     
     # 基础路径
     BASE_PANEL_PATH: str = _BASE_PANEL

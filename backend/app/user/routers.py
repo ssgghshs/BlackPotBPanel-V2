@@ -31,6 +31,11 @@ async def login(request: Request, form_data: schemas.UserLogin, db: AsyncSession
     return await service.login(request, form_data, db)
 
 
+@router.post("/login/mfa", response_model=schemas.TokenWithDefaultPasswordCheck)
+async def mfa_login(request: Request, form_data: schemas.MFALogin, db: AsyncSession = Depends(get_db)):
+    return await service.mfa_login(request, form_data, db)
+
+
 @router.get("/me", response_model=schemas.UserResponse)
 async def read_users_me(current_user=Depends(get_current_active_user)):
     return current_user

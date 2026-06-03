@@ -51,6 +51,12 @@ class UserLogin(BaseModel):
     captcha: str
 
 
+class MFALogin(BaseModel):
+    username: str
+    password: str
+    code: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -67,6 +73,7 @@ class PasswordChange(BaseModel):
 
 class TokenWithDefaultPasswordCheck(Token):
     is_default_password: bool
+    mfa_required: bool = False
 
 
 class CaptchaResponse(BaseModel):

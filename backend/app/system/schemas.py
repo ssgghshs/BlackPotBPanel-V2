@@ -97,6 +97,9 @@ class EnvConfigBase(BaseModel):
     API_KEY: Optional[str] = None
     API_IP_WHITELIST: Optional[str] = None
     API_KEY_VALIDITY_TIME: Optional[int] = None
+    MFA_ENABLED: Optional[bool] = None
+    MFA_INTERVAL: Optional[int] = None
+    MFA_SECRET: Optional[str] = None
 
 class EnvConfigCreate(EnvConfigBase):
     """创建环境配置模型"""

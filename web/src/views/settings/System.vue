@@ -101,6 +101,10 @@
                 <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3);">{{ t('apiInterfaceNote') }}</span>
                 <a-link  style="margin-left: 10px;" @click="handleOpenApiConfigDialog">{{ t('settings') }}</a-link>
               </a-form-item>
+              <a-form-item :label="t('mfa') + ':'" class="form-item">
+                <a-switch :model-value="systemConfig.MFA_ENABLED" @change="handleMFA" />
+                <span style="margin-left: 8px; font-size: 12px; color: var(--color-text-3);">{{ t('mfaHelper') }}</span>
+              </a-form-item>
             </a-form>
           </template>
           <template v-else>
@@ -411,7 +415,10 @@
       </a-form>
     </a-modal>
 
- </template>
+    <!-- MFA 设置对话框 -->
+    <MfaSetting ref="mfaRef" @close="handleMfaClose" />
+
+</template>
 
 <script setup>
 import { reactive, onMounted, computed, ref } from 'vue';
@@ -422,6 +429,7 @@ import { getEnvConfig, updateEnvConfig, generateApiKey, restartService, getSSLCe
 // 导入用户状态和函数
 import { isAdmin, fetchCurrentUser as fetchCurrentUserStore } from '../../stores/user';
 import MiniFileManager from '../../components/file/MiniFileManager.vue';
+import MfaSetting from '../../components/mfa/MfaSetting.vue';
 
 const formState = reactive({
   closePanel: false,
@@ -448,7 +456,9 @@ const systemConfig = reactive({
   API_OPEN: true,
   API_KEY: '',
   API_IP_WHITELIST: '127.0.0.1',
-  API_KEY_VALIDITY_TIME: 0
+  API_KEY_VALIDITY_TIME: 0,
+  MFA_ENABLED: false,
+  MFA_INTERVAL: 30
 });
 
 // 当前用户信息（保留用于兼容性，实际使用store中的currentUser）
@@ -464,6 +474,27 @@ const apiConfigForm = reactive({
   API_IP_WHITELIST: '127.0.0.1',
   API_KEY_VALIDITY_TIME: 0
 });
+
+// MFA 设置对话框
+const mfaRef = ref(null);
+const handleMFA = (value) => {
+  if (value) {
+    // 开启 MFA → 弹出 MFA 对话框
+    mfaRef.value?.acceptParams()
+  } else {
+    // 关闭 MFA → 直接保存
+    updateEnvConfig({ MFA_ENABLED: false }).then(() => {
+      Message.success(t.value('mfaClose'))
+      systemConfig.MFA_ENABLED = false
+    }).catch((error) => {
+      Message.error(error.response?.data?.detail || t.value('updateFailed'))
+    })
+  }
+}
+const handleMfaClose = () => {
+  // MFA 对话框关闭后，刷新配置
+  fetchSystemConfig()
+}
 
 // 重启服务确认对话框可见性
 const restartModalVisible = ref(false);
@@ -649,6 +680,12 @@ const fetchSystemConfig = async () => {
     }
     if (configs.ALLOW_IPS !== undefined) {
       systemConfig.ALLOW_IPS = configs.ALLOW_IPS;
+    }
+    if (configs.MFA_ENABLED !== undefined) {
+      systemConfig.MFA_ENABLED = configs.MFA_ENABLED === 'True' || configs.MFA_ENABLED === true;
+    }
+    if (configs.MFA_INTERVAL !== undefined) {
+      systemConfig.MFA_INTERVAL = parseInt(configs.MFA_INTERVAL, 10);
     }
     if (configs.API_OPEN !== undefined) {
       systemConfig.API_OPEN = configs.API_OPEN === 'True' || configs.API_OPEN === true;

@@ -1707,5 +1707,20 @@
   "timeSyncFailed": "Time sync failed",
   "generateApiKeySuccess": "API key generated successfully",
   "generateApiKeyFailed": "Failed to generate API key",
-  "ipWhitelistFillinNote": "IP Whitelist Format: 1.2.3.4,5.6.7.8 or 10.0.0.0/8,192.168.1.0/24 or 27.0.0.1,10.0.0.0/8,114.114.114.0/24"
+  "ipWhitelistFillinNote": "IP Whitelist Format: 1.2.3.4,5.6.7.8 or 10.0.0.0/8,192.168.1.0/24 or 27.0.0.1,10.0.0.0/8,114.114.114.0/24",
+  "mfa": "MFA Verification",
+  "mfaHelper": "Requires a verification code when logging in",
+  "mfaHelper1": "1. Install an authenticator app first",
+  "mfaHelper2": "2. Scan QR code or enter secret manually",
+  "mfaHelper3": "Please enter 6-digit code",
+  "mfaCode": "Verification Code",
+  "mfaAlert": "After enabling MFA, you will need to enter a verification code from your authenticator app when logging in. Make sure you have bound it before enabling, otherwise you may not be able to log in.",
+  "mfaInterval": "Code Period (s)",
+  "secret": "Secret",
+  "verify": "Verify",
+  "mfaClose": "MFA two-factor auth disabled",
+  "mfaInvalidCode": "Invalid verification code, please try again",
+  "bindSuccess": "Bind successful",
+  "bindFailed": "Bind failed",
+  "loadFailed": "Load failed"
 }

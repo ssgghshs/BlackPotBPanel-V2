@@ -1,6 +1,7 @@
 import uuid
 import base64
 import os
+import json
 import logging
 import time
 from typing import Dict, List, Optional
@@ -212,6 +213,90 @@ async def login(request: Request, form_data: schemas.UserLogin, db: AsyncSession
         await log_service.create_login_log(db, login_log)
     except Exception as log_error:
         logger.error(f"记录登录日志失败: {log_error}")
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": form_data.username}, expires_delta=access_token_expires)
+
+    # 检查 MFA 是否开启
+    mfa_config = _read_mfa_config()
+    if mfa_config.get("MFA_ENABLED", False) and mfa_config.get("MFA_SECRET"):
+        # MFA 已开启，不发 token，要求用户走第二步验证
+        return {"access_token": "", "token_type": "bearer", "is_default_password": is_default_password, "mfa_required": True}
+
+    return {"access_token": access_token, "token_type": "bearer", "is_default_password": is_default_password}
+
+
+# MFA 配置读写（与 api.json 类似）
+def _read_mfa_config() -> dict:
+    """从 mfa.json 读取 MFA 配置"""
+    defaults = {"MFA_SECRET": "", "MFA_INTERVAL": 30, "MFA_ENABLED": False}
+    path = settings.MFA_CONFIG_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    for k in defaults:
+                        if k in data:
+                            defaults[k] = data[k]
+        except (json.JSONDecodeError, IOError):
+            pass
+    return defaults
+
+
+def _write_mfa_config(config: dict) -> None:
+    """写入 mfa.json"""
+    path = settings.MFA_CONFIG_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
+async def mfa_login(request: Request, form_data: schemas.MFALogin, db: AsyncSession) -> dict:
+    """MFA 第二步验证：验证用户名密码 + TOTP 验证码"""
+    ip_address = request.client.host if request.client else None
+
+    # 验证用户名密码
+    user = await authenticate_user(db, form_data.username, form_data.password, models.User)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 验证 MFA 验证码
+    mfa_config = _read_mfa_config()
+    if not mfa_config.get("MFA_ENABLED") or not mfa_config.get("MFA_SECRET"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="MFA not enabled")
+
+    from utils.mfa import verify_code
+    interval = int(mfa_config.get("MFA_INTERVAL", 30))
+    if not verify_code(form_data.code, mfa_config["MFA_SECRET"], interval):
+        user_agent = request.headers.get("user-agent")
+        location = get_location_from_ip(ip_address)
+        try:
+            login_log = log_schemas.LoginLogCreate(
+                user_id=user.id, username=form_data.username,
+                ip_address=ip_address, user_agent=user_agent,
+                status="failed", location=location
+            )
+            await log_service.create_login_log(db, login_log)
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid MFA code")
+
+    is_default_password = verify_password(DEFAULT_PASSWORD, user.hashed_password)
+    user_agent = request.headers.get("user-agent")
+    location = get_location_from_ip(ip_address)
+    try:
+        login_log = log_schemas.LoginLogCreate(
+            user_id=user.id, username=form_data.username,
+            ip_address=ip_address, user_agent=user_agent,
+            status="success", location=location
+        )
+        await log_service.create_login_log(db, login_log)
+    except Exception:
+        pass
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(data={"sub": form_data.username}, expires_delta=access_token_expires)

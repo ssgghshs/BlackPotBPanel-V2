@@ -26,7 +26,8 @@
       
       <!-- 使用 ConfigProvider 包裹表单以支持国际化 -->
       <a-config-provider :locale="locale">
-        <a-form :model="loginForm" :rules="rules" ref="formRef" @submit="handleLogin" layout="vertical">
+        <!-- 第一步：用户名密码登录 -->
+        <a-form v-if="!mfaShow" :model="loginForm" :rules="rules" ref="formRef" @submit="handleLogin" layout="vertical">
           <a-form-item field="username" :label="t('username')">
             <a-input 
               v-model="loginForm.username" 
@@ -98,6 +99,33 @@
             </a-button>
           </a-form-item>
         </a-form>
+
+        <!-- 第二步：MFA 验证码 -->
+        <a-form v-else @submit.prevent="handleMfaLogin" layout="vertical">
+          <a-form-item :label="t('mfaCode')" field="mfaCode">
+            <a-input
+              v-model="mfaCode"
+              :placeholder="t('mfaHelper3')"
+              size="large"
+              maxlength="6"
+              @input="onMfaInput"
+            />
+          </a-form-item>
+          <a-form-item>
+            <a-button 
+              type="primary"
+              html-type="submit"
+              :loading="loading"
+              long
+              size="large"
+            >
+              {{ t('verify') }}
+            </a-button>
+          </a-form-item>
+          <a-form-item>
+            <a-link @click="handleCancelMfa">{{ t('back') }}</a-link>
+          </a-form-item>
+        </a-form>
       </a-config-provider>
       
       <div class="login-footer">
@@ -113,7 +141,7 @@ import { reactive, ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notification } from '@arco-design/web-vue'
 import { IconUser, IconLock, IconSafe } from '@arco-design/web-vue/es/icon'
-import { login, getCaptcha } from '../api/user'  // 使用封装的登录方法
+import { login, getCaptcha, mfaLogin } from '../api/user'  // 使用封装的登录方法
 // 引入全局语言状态管理
 import { currentLocale, locale, changeLocale, t } from '../utils/locale'
 import { fetchCurrentUser } from '../stores/user'
@@ -125,6 +153,11 @@ const loading = ref(false)
 const formRef = ref()
 const captchaImage = ref('')
 const captchaId = ref('')
+
+// MFA 状态
+const mfaShow = ref(false)
+const mfaCode = ref('')
+const mfaCredentials = reactive({ username: '', password: '' })
 
 const LOCKOUT_STORAGE_KEY = 'loginLockoutEnd';
 const lockoutEndTime = ref(0);
@@ -266,6 +299,14 @@ const handleLogin = async (data) => {
       captcha: loginForm.captcha
     }, captchaId.value)
     
+    // 检查是否需要 MFA 两步验证
+    if (response.mfa_required) {
+      mfaCredentials.username = loginForm.username
+      mfaCredentials.password = loginForm.password
+      mfaShow.value = true
+      return
+    }
+    
     // 保存token到localStorage
     const token = response.access_token
     localStorage.setItem('access_token', token)
@@ -323,6 +364,65 @@ const handleLogin = async (data) => {
   } finally {
     loading.value = false
   }
+}
+
+// MFA 第二步：验证 TOTP 验证码
+const handleMfaLogin = async () => {
+  if (!mfaCode.value || mfaCode.value.length !== 6) {
+    Notification.error(t.value('mfaHelper3'))
+    return
+  }
+  loading.value = true
+  try {
+    const response = await mfaLogin({
+      username: mfaCredentials.username,
+      password: mfaCredentials.password,
+      code: mfaCode.value
+    })
+    
+    const token = response.access_token
+    localStorage.setItem('access_token', token)
+    
+    if (response.is_default_password) {
+      localStorage.setItem('isDefaultPassword', 'true')
+    } else {
+      localStorage.removeItem('isDefaultPassword')
+    }
+    
+    await fetchCurrentUser()
+    
+    try {
+      await updateCommonSettings({ LANGUAGE: currentLocale.value })
+    } catch (error) {
+      console.error('更新语言设置失败:', error)
+    }
+    
+    Notification.success(t.value('loginSuccess'))
+    router.push('/home?login_success=true')
+  } catch (error) {
+    console.error('MFA 验证失败:', error)
+    const backendMessage = error.response?.data?.detail
+    if (backendMessage && backendMessage.includes('Invalid MFA code')) {
+      Notification.error(t.value('mfaInvalidCode'))
+    } else {
+      Notification.error(t.value('loginFailed'))
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+// 自动提交 MFA 验证码（6位数时自动触发）
+const onMfaInput = (value) => {
+  if (value && value.length === 6) {
+    handleMfaLogin()
+  }
+}
+
+// 取消 MFA，返回第一步
+const handleCancelMfa = () => {
+  mfaShow.value = false
+  mfaCode.value = ''
 }
 </script>
 

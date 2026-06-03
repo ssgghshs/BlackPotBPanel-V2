@@ -460,3 +460,28 @@ async def generate_api_key(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"生成 API 密钥失败: {str(e)}"
         )
+
+
+@router.post("/config/mfa/generate")
+async def generate_mfa(
+    current_user = Depends(get_current_active_user)
+):
+    """生成 MFA 密钥和二维码"""
+    try:
+        if current_user.role != RoleEnum.ADMIN.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admin can generate MFA"
+            )
+        # 使用当前用户名
+        from utils.mfa import generate_mfa as gen_mfa
+        result = gen_mfa(current_user.username)
+        return {"code": 200, "message": "MFA generated", "data": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"生成 MFA 失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Generate MFA failed: {str(e)}"
+        )

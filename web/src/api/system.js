@@ -174,5 +174,18 @@ export function toggleHosts(data) {
   })
 }
 
+// 生成 MFA 密钥和二维码
+export function loadMFA() {
+  return request({
+    url: '/system/config/mfa/generate',
+    method: 'post'
+  })
+}
+
+// 绑定 MFA（通过 updateEnvConfig 保存 MFA_ENABLED、MFA_INTERVAL）
+export function bindMFA(data) {
+  return updateEnvConfig(data)
+}
+
 
 

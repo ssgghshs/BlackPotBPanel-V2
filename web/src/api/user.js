@@ -103,3 +103,12 @@ export function deleteUser(id) {
     method: 'post'
   })
 }
+
+// MFA 第二步登录
+export function mfaLogin(data) {
+  return request({
+    url: '/users/login/mfa',
+    method: 'post',
+    data
+  })
+}

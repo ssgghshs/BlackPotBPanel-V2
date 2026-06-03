@@ -23,6 +23,7 @@ ADMIN_CONFIG_FIELDS = [
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
     'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING', 'ALLOW_IPS',
     'API_OPEN', 'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME',
+    'MFA_ENABLED', 'MFA_INTERVAL',
 ]
 USER_CONFIG_FIELDS = ['APP_NAME', 'VERSION', 'TIMEZONE', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
 
@@ -33,6 +34,7 @@ ADMIN_CONFIG_EDITABLE = [
     'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE', 'HOST', 'PORT', 'SSL_ENABLED',
     'LOGIN_LIMIT', 'SECURITY_ENTRANCE', 'DOMAIN_BINDING', 'ALLOW_IPS',
     'API_OPEN', 'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME',
+    'MFA_ENABLED', 'MFA_INTERVAL', 'MFA_SECRET',
 ]
 USER_CONFIG_EDITABLE = ['APP_NAME', 'LANGUAGE', 'THEME', 'LOGIN_NOTIFY', 'RECYCLE']
 
@@ -109,6 +111,27 @@ def _write_allow_ips_config(allow_ips: str) -> None:
         json.dump({"ALLOW_IPS": allow_ips}, f, indent=2, ensure_ascii=False)
 
 
+def _write_mfa_config(mfa_updates: dict) -> None:
+    """写入 MFA 配置到 mfa.json（合并写入）"""
+    from config.settings import settings
+    path = settings.MFA_CONFIG_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # 读取现有配置
+    config = {"MFA_SECRET": "", "MFA_INTERVAL": 30, "MFA_ENABLED": False}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+                if isinstance(existing, dict):
+                    config.update(existing)
+        except (json.JSONDecodeError, IOError):
+            pass
+    # 合并更新
+    config.update(mfa_updates)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
 async def get_env_config(user_role: str) -> Dict[str, str]:
     """
     获取环境配置
@@ -141,6 +164,20 @@ async def get_env_config(user_role: str) -> Dict[str, str]:
                     allow_data = json.load(f)
                     if isinstance(allow_data, dict) and allow_data.get("ALLOW_IPS"):
                         configs["ALLOW_IPS"] = allow_data["ALLOW_IPS"]
+            except (json.JSONDecodeError, IOError):
+                pass
+        
+        # 合并 mfa.json 中的配置
+        mfa_path = settings.MFA_CONFIG_PATH
+        if os.path.exists(mfa_path):
+            try:
+                with open(mfa_path, "r", encoding="utf-8") as f:
+                    mfa_data = json.load(f)
+                    if isinstance(mfa_data, dict):
+                        if mfa_data.get("MFA_ENABLED"):
+                            configs["MFA_ENABLED"] = str(mfa_data["MFA_ENABLED"])
+                        if mfa_data.get("MFA_INTERVAL") is not None:
+                            configs["MFA_INTERVAL"] = str(mfa_data["MFA_INTERVAL"])
             except (json.JSONDecodeError, IOError):
                 pass
         
@@ -182,8 +219,10 @@ async def update_env_config(config_data: schemas.EnvConfigUpdate, user_role: str
         update_data = config_data.model_dump(exclude_unset=True)
         api_json_fields = {'API_KEY', 'API_IP_WHITELIST', 'API_KEY_VALIDITY_TIME'}
         allow_ips_json_fields = {'ALLOW_IPS'}
+        mfa_json_fields = {'MFA_ENABLED', 'MFA_INTERVAL', 'MFA_SECRET'}
         api_json_updates = {}
         allow_ips_json_updates = {}
+        mfa_json_updates = {}
 
         for key, value in update_data.items():
             if key in allowed_fields and value is not None:
@@ -191,6 +230,8 @@ async def update_env_config(config_data: schemas.EnvConfigUpdate, user_role: str
                     api_json_updates[key] = value
                 elif key in allow_ips_json_fields:
                     allow_ips_json_updates[key] = value
+                elif key in mfa_json_fields:
+                    mfa_json_updates[key] = value
                 else:
                     current_configs[key] = str(value)
 
@@ -208,6 +249,10 @@ async def update_env_config(config_data: schemas.EnvConfigUpdate, user_role: str
         # 写入 allow_ips.json（ALLOW_IPS）
         if allow_ips_json_updates:
             _write_allow_ips_config(allow_ips_json_updates.get("ALLOW_IPS", ""))
+
+        # 写入 mfa.json（MFA_ENABLED、MFA_INTERVAL）
+        if mfa_json_updates:
+            _write_mfa_config(mfa_json_updates)
 
         # 根据用户角色过滤返回的配置项
         if user_role == "ADMIN":

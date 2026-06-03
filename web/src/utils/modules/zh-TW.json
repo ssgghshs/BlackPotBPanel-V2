@@ -1741,5 +1741,20 @@
   "timeSyncFailed": "時間同期失敗",
   "generateApiKeySuccess": "生成API密钥成功",
   "generateApiKeyFailed": "生成API密钥失败",
-  "ipWhitelistFillinNote": "IP 白リスト格式：1.2.3.4,5.6.7.8或 10.0.0.0/8,192.168.1.0/24 或 27.0.0.1,10.0.0.0/8,114.114.114.0/24"
-}  
+  "ipWhitelistFillinNote": "IP 白リスト格式：1.2.3.4,5.6.7.8或 10.0.0.0/8,192.168.1.0/24 或 27.0.0.1,10.0.0.0/8,114.114.114.0/24",
+  "mfa": "MFA驗證",
+  "mfaHelper": "開啟後登入需要輸入驗證碼",
+  "mfaHelper1": "1. 請先安裝身份驗證器應用",
+  "mfaHelper2": "2. 掃描二維碼或手動輸入密鑰",
+  "mfaHelper3": "請輸入 6 位驗證碼",
+  "mfaCode": "身份驗證碼",
+  "mfaAlert": "溫馨提示：開啟兩步驗證後，登入時將需要額外輸入身份驗證器應用生成的驗證碼。請確保已綁定後再開啟，否則可能無法登入面板。",
+  "mfaInterval": "驗證碼週期（秒）",
+  "secret": "密鑰",
+  "verify": "驗證",
+  "mfaClose": "MFA 兩步驗證已關閉",
+  "mfaInvalidCode": "驗證碼無效，請重試",
+  "bindSuccess": "綁定成功",
+  "bindFailed": "綁定失敗",
+  "loadFailed": "加載失敗"
+}
