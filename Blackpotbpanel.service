@@ -1,6 +1,7 @@
 [Unit]
 Description=BlackPotBPanel Backend Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -10,7 +11,10 @@ WorkingDirectory=/opt/blackpotbpanel-v2/backend
 Environment=PATH=/opt/blackpotbpanel-v2/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/opt/blackpotbpanel-v2/venv/bin/python main.py
 Restart=always
-RestartSec=3
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
