@@ -53,11 +53,7 @@
         <button class="ds-btn-menu" @click="sidebarOpen = !sidebarOpen">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <div class="ds-model-picker">
-          <select v-model="selectedModelId" class="ds-model-select" @change="onModelChange">
-            <option v-for="m in modelList" :key="m.id" :value="m.id">{{ m.name }}</option>
-          </select>
-        </div>
+        <span class="ds-title">{{ t('aiChat') }}</span>
       </header>
 
       <!-- 消息区 -->
@@ -115,21 +111,40 @@
             @keydown="onInputKeydown"
             @input="autoResize"
           ></textarea>
-          <button
-            v-if="streaming"
-            class="ds-btn-send ds-btn-stop"
-            @click="stopStreaming"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-          </button>
-          <button
-            v-else
-            class="ds-btn-send"
-            :disabled="!inputMessage.trim() || !selectedModelId || sending"
-            @click="sendMessage"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
+          <div class="ds-input-toolbar">
+            <div class="ds-input-left">
+              <a-select
+                v-model="selectedModelId"
+                class="ds-input-model-select"
+                @change="onModelChange"
+                :disabled="smartMode"
+                :placeholder="t('selectModel')"
+                popup-placement="top"
+                size="mini"
+              >
+                <a-option v-for="m in modelList" :key="m.id" :value="m.id">{{ m.name }}</a-option>
+              </a-select>
+              <label class="ds-input-smart">
+                <input type="checkbox" v-model="smartMode" />
+                <span>{{ t('smartMode') }}</span>
+              </label>
+            </div>
+            <button
+              v-if="streaming"
+              class="ds-btn-send ds-btn-stop"
+              @click="stopStreaming"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </button>
+            <button
+              v-else
+              class="ds-btn-send"
+              :disabled="!inputMessage.trim() || !selectedModelId || sending"
+              @click="sendMessage"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -173,6 +188,7 @@ import {
   updateAiConversation,
   getAiMessages,
   deleteAiMessage,
+  switchAiConversationModel,
   streamChatWithAi,
 } from '../../api/ai'
 import { Message } from '@arco-design/web-vue'
@@ -193,6 +209,9 @@ const loadingConversations = ref(false)
 const loadingMessages = ref(false)
 const messageListRef = ref(null)
 const abortController = ref(null)
+
+// 智能模式
+const smartMode = ref(false)
 
 // 删除
 const deleteModalVisible = ref(false)
@@ -449,7 +468,8 @@ async function streamChat(text) {
     const response = await streamChatWithAi({
       model_id: selectedModelId.value,
       conversation_id: currentConversationId.value,
-      message: text
+      message: text,
+      smart_mode: smartMode.value
     }, abortController.value.signal)
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -526,7 +546,21 @@ function resetTextarea() {
   })
 }
 
-function onModelChange() {}
+function onModelChange() {
+  // 切换模型时更新当前对话的模型信息
+  if (currentConversationId.value) {
+    const selectedModel = modelList.value.find(m => m.id === selectedModelId.value)
+    if (selectedModel) {
+      switchAiConversationModel(currentConversationId.value, {
+        model_id: selectedModel.id,
+        model_name: selectedModel.model_name
+      }).then(() => {
+        // 模型切换后重新加载消息（旧模型的回复已被后端清除）
+        loadMessages(currentConversationId.value)
+      }).catch(() => {})
+    }
+  }
+}
 
 function renderMessage(content) {
   if (!content) return ''
@@ -734,28 +768,10 @@ onMounted(async () => {
   color: var(--color-text-1);
 }
 
-.ds-model-picker {
-  flex: 1;
-}
-
-.ds-model-select {
-  width: auto;
-  padding: 6px 28px 6px 12px;
-  border: 1px solid var(--color-border-2);
-  border-radius: 6px;
-  background: var(--color-bg-1);
+.ds-title {
+  font-size: 15px;
+  font-weight: 600;
   color: var(--color-text-1);
-  font-size: 13px;
-  outline: none;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-}
-
-.ds-model-select:focus {
-  border-color: rgb(var(--primary-6));
 }
 
 /* ===== 消息区 ===== */
@@ -937,14 +953,14 @@ onMounted(async () => {
 }
 
 .ds-input-box {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 8px;
   border: 1px solid var(--color-border-2);
-  border-radius: 12px;
-  padding: 8px 8px 8px 16px;
+  border-radius: 16px;
+  padding: 14px 14px 8px 18px;
   background: var(--color-bg-2);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -955,28 +971,74 @@ onMounted(async () => {
 }
 
 .ds-textarea {
-  flex: 1;
+  width: 100%;
   border: none;
   outline: none;
   resize: none;
   background: transparent;
   color: var(--color-text-1);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.6;
   font-family: inherit;
-  max-height: 200px;
-  min-height: 24px;
+  max-height: 240px;
+  min-height: 28px;
 }
 
 .ds-textarea::placeholder {
   color: var(--color-text-3);
 }
 
+.ds-input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ds-input-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ds-input-model-select {
+  width: 140px;
+}
+
+.ds-input-model-select:not(.arco-select-disabled) {
+  cursor: pointer;
+}
+
+.ds-input-model-select :deep(.arco-select-view) {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.ds-input-smart {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: var(--color-text-3);
+  white-space: nowrap;
+}
+
+.ds-input-smart input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: rgb(var(--primary-6));
+  cursor: pointer;
+  margin: 0;
+}
+
 .ds-btn-send {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgb(var(--primary-6));
   color: #fff;
   cursor: pointer;

@@ -91,6 +91,15 @@ export function updateAiConversation(id, data) {
   })
 }
 
+// 切换对话使用的模型
+export function switchAiConversationModel(id, data) {
+  return request({
+    url: `/ai/conversations/${id}/switch-model`,
+    method: 'post',
+    data
+  })
+}
+
 // 删除对话
 export function deleteAiConversation(id) {
   return request({
