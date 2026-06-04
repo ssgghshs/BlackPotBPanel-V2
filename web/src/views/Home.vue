@@ -148,7 +148,6 @@ import { getCurrentUser, changePassword } from '../api/user';
 import { updateCommonSettings, restartService, rebootServer, rebootStatus } from '../api/system';
 import PanelResource from '../components/monitor/PanelResource.vue';
 import Footer from '../components/Footer.vue'
-import * as echarts from 'echarts5';
 import SystemMonitor from '../components/monitor/SystemMonitor.vue'
 import HostInfo from '../components/monitor/HostInfo.vue'
 import NetworkTrafficMonitor from '../components/monitor/NetworkTrafficMonitor.vue'
@@ -173,10 +172,6 @@ const systemInfo = reactive({
   uptime: '12 days, 5 hours, 32 minutes',
   hostname: 'server-01'
 });
-
-// 图表引用
-const networkChartRef = ref();
-let networkChart = null;
 
 // 修改密码弹窗相关
 const showChangePasswordModal = ref(false);
@@ -253,15 +248,6 @@ let isComponentMounted = true;
 onBeforeUnmount(() => {
   isComponentMounted = false;
   
-  if (networkChart) {
-    try {
-      networkChart.dispose();
-    } catch (e) {
-      console.warn('图表销毁失败:', e);
-    }
-    networkChart = null;
-  }
-  
   if (dataUpdateTimer) {
     clearInterval(dataUpdateTimer);
     dataUpdateTimer = null;
@@ -271,9 +257,6 @@ onBeforeUnmount(() => {
 // 组件挂载时获取用户信息并检查是否需要显示修改密码弹窗
 onMounted(() => {
   fetchUserInfo();
-
-  // 初始化图表
-  initCharts();
 
   // 启动定时器更新数据
   startDataUpdate();
@@ -290,57 +273,6 @@ onMounted(() => {
   }
 });
 
-// 初始化图表
-const initCharts = () => {
-  // 确保组件仍然挂载
-  if (!isComponentMounted) {
-    return;
-  }
-  
-  if (networkChartRef.value) {
-    networkChart = echarts.init(networkChartRef.value);
-    updateNetworkChart();
-  }
-};
-
-// 更新网络流量图表
-const updateNetworkChart = () => {
-  // 确保组件仍然挂载且图表实例存在
-  if (!isComponentMounted || !networkChart) return;
-
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: '{b}<br/>{a0}: {c0} KB/s<br/>{a1}: {c1} KB/s'
-    },
-    legend: {
-      data: ['接收流量', '发送流量']
-    },
-    xAxis: {
-      type: 'category',
-      data: []
-    },
-    yAxis: {
-      type: 'value',
-      name: '流量 (KB/s)'
-    },
-    series: [
-      {
-        name: '接收流量',
-        type: 'line',
-        data: []
-      },
-      {
-        name: '发送流量',
-        type: 'line',
-        data: []
-      }
-    ]
-  };
-
-  networkChart.setOption(option);
-};
-
 // 启动数据更新
 const startDataUpdate = () => {
   dataUpdateTimer = setInterval(() => {
@@ -354,9 +286,6 @@ const startDataUpdate = () => {
     memoryUsage.value = Math.floor(Math.random() * 100);
     diskUsage.value = Math.floor(Math.random() * 100);
     systemLoad.value = (Math.random() * 5).toFixed(2);
-
-    // 更新图表
-    updateNetworkChart();
   }, 5000); // 每5秒更新一次
 };
 

@@ -23,6 +23,7 @@ from app.waf.routers import router as waf_router
 from app.service.routers import router as service_router
 from app.crontab.routers import router as crontab_router
 from app.database.routers import router as database_router
+from app.ai.routers import router as ai_router
 import config.settings
 
 logger = logging.getLogger(__name__)
@@ -293,6 +294,7 @@ def create_app():
     app.include_router(service_router, prefix=api_prefix)
     app.include_router(crontab_router, prefix=api_prefix)
     app.include_router(database_router, prefix=api_prefix)
+    app.include_router(ai_router, prefix=api_prefix)
 
     web_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dist")
 

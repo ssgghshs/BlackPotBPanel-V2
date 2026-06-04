@@ -35,6 +35,14 @@
         </a-menu-item>
       </a-tooltip>
 
+      <!-- AI管理 -->
+      <a-tooltip v-if="!isAuditor()" :content="t('ai')" :disabled="!isMenuCollapsed" mini position="right">
+        <a-menu-item key="ai">
+          <template #icon><icon-robot /></template>
+          <span v-show="!isMenuCollapsed">AI</span>
+        </a-menu-item>
+      </a-tooltip>
+    
       <!-- 数据库管理 -->
       <a-tooltip v-if="!isAuditor()" :content="t('database')" :disabled="!isMenuCollapsed" mini position="right">
         <a-menu-item key="database">
@@ -121,7 +129,8 @@ import {
   IconRight,
   IconClose,
   IconMobile,
-  IconSafe
+  IconSafe,
+  IconRobot
 } from '@arco-design/web-vue/es/icon';
 import { Tooltip } from '@arco-design/web-vue';
 // 引入全局语言状态管理
@@ -148,6 +157,7 @@ export default {
     IconMobile,
     IconSafe,
     DatabaseIcon,
+    IconRobot,
     ATooltip: Tooltip
   },
   setup(props, { emit }) {
@@ -170,6 +180,8 @@ export default {
         return ['logs'];
       } else if (path.startsWith('/file')) {
         return ['file'];
+      } else if (path.startsWith('/ai')) {
+        return ['ai'];
       } else if (path.startsWith('/security')) {
         return ['security'];
       } else if (path.startsWith('/waf')) {
@@ -199,6 +211,9 @@ export default {
           break;
         case 'file':
           router.push('/file');
+          break;
+        case 'ai':
+          router.push('/ai');
           break;
         case 'security':
           router.push('/security');

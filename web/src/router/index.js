@@ -72,6 +72,12 @@ const routes = [
           {path: 'postgresql/:id/manage', name: 'PostgresqlManager', component: () => import('../views/database/PostgresqlManager.vue'), meta: { title: 'PostgreSQL 管理' }} ,
         ]
       },
+      {path: 'ai', name: 'Ai', component: () => import('../views/ai/Base.vue'),redirect: '/ai/chat', meta: { title: 'AI' },
+        children: [
+          {path: 'chat', name: 'Chat', component: () => import('../views/ai/AIChat.vue'), meta: { title: 'AI Chat' }} ,
+          {path: 'model', name: 'Model', component: () => import('../views/ai/Model.vue'), meta: { title: '模型管理' }} ,
+        ]
+      },
     ]
   },
   {path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { title: '登录' }},

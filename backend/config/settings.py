@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # 数据库数据库配置
     DATABASE_DATABASE_URL: str = "sqlite:///./db/database.db"
     
+    # AI 数据库配置
+    AI_DATABASE_URL: str = "sqlite:///./db/ai.db"
+    
 
     
     # 应用配置

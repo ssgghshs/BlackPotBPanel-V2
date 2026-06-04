@@ -123,6 +123,23 @@ CrontabTaskBase = declarative_base()
 # 创建数据库数据库基础模型类
 DatabaseBase = declarative_base()
 
+# 创建 AI 数据库引擎
+ai_engine = create_async_engine(
+    settings.AI_DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///"),
+    connect_args={"check_same_thread": False}
+)
+
+# 创建 AI 数据库异步会话工厂
+AiAsyncSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=ai_engine,
+    class_=AsyncSession
+)
+
+# 创建 AI 数据库基础模型类
+AiBase = declarative_base()
+
 
 
 async def get_db():
@@ -188,6 +205,17 @@ async def get_crontab_db():
         except Exception:
             await db.rollback()
             raise
+
+async def get_ai_db():
+    """获取 AI 数据库异步会话"""
+    async with AiAsyncSessionLocal() as db:
+        try:
+            yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
 
 async def get_database_db():
     """获取数据库数据库异步会话"""

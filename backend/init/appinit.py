@@ -21,7 +21,8 @@ from config.database import (
     firewall_engine, FirewallBase, FirewallAsyncSessionLocal,
     waf_engine, WafBase,
     crontab_engine, CrontabTaskBase, CrontabAsyncSessionLocal,
-    database_engine, DatabaseBase, DatabaseAsyncSessionLocal
+    database_engine, DatabaseBase, DatabaseAsyncSessionLocal,
+    ai_engine, AiBase
 )
 from datetime import datetime, timedelta
 
@@ -338,6 +339,11 @@ async def init_database_db():
     async with database_engine.begin() as conn:
         await conn.run_sync(DatabaseBase.metadata.create_all)
 
+async def init_ai_db():
+    """初始化 AI 数据库"""
+    async with ai_engine.begin() as conn:
+        await conn.run_sync(AiBase.metadata.create_all)
+
 
 def run_initialization():
     """运行所有初始化操作"""
@@ -358,6 +364,7 @@ def run_initialization():
         asyncio.run(init_waf_db())
         asyncio.run(init_crontab_db())
         asyncio.run(init_database_db())
+        asyncio.run(init_ai_db())
         asyncio.run(create_admin_user())
         asyncio.run(create_localhost_host())
         asyncio.run(create_local_docker_node())
