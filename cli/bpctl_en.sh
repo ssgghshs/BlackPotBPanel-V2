@@ -84,6 +84,10 @@ print_menu() {
     entrance_status=$(get_security_entrance)
     local domain_binding_status
     domain_binding_status=$(get_domain_binding)
+    local allow_ips_status
+    allow_ips_status=$(get_allow_ips_status)
+    local mfa_status
+    mfa_status=$(get_mfa_status)
 
     echo -e "${YELLOW}Panel Status:${NC}"
     echo "----------------------------------------"
@@ -92,21 +96,26 @@ print_menu() {
     echo -e "  SSL:          $ssl_status"
     echo -e "  Entrance:     $entrance_status"
     echo -e "  Domain Bind:  $domain_binding_status"
+    echo -e "  Allow IPs:    $allow_ips_status"
+    echo -e "  MFA:          $mfa_status"
     echo -e "  Install Path: ${BLUE}$BASE_DIR${NC}"
     echo "----------------------------------------"
     echo ""
     echo -e "${YELLOW}Select an option:${NC}"
     echo ""
+    echo "  0) Exit"    
     echo "  1) Start panel service"
     echo "  2) Stop panel service"
     echo "  3) Restart panel service"
-    echo "  4) Change panel port"
-    echo "  5) Toggle panel SSL"
-    echo "  6) Change admin password"
-    echo "  7) Change security entrance"
-    echo "  8) Bind domain name"
-    echo "  9) Uninstall panel"
-    echo "  0) Exit"
+    echo "  4) View service status"
+    echo "  5) Change panel port"
+    echo "  6) Toggle panel SSL"
+    echo "  7) Change admin password"
+    echo "  8) Change security entrance"
+    echo "  9) Bind domain name"
+    echo "  10) Toggle allow IPs"
+    echo "  11) Toggle MFA"
+    echo "  12) Uninstall panel"
     echo ""
 }
 
@@ -150,6 +159,65 @@ restart_service() {
             echo -e "${RED}[Error] Failed to restart, please check service configuration${NC}"
         fi
     fi
+}
+
+show_service_status() {
+    local port
+    port=$(get_current_port)
+    local state
+    state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null)
+    local enabled
+    enabled=$(systemctl is-enabled "$SERVICE_NAME" 2>/dev/null)
+
+    echo -e "${YELLOW}--- Basic Status ---${NC}"
+    echo -e "  Service Name:  ${BLUE}$SERVICE_NAME${NC}"
+    echo -e "  Active State:  $(get_service_status)"
+    echo -e "  Enabled:       ${GREEN}$enabled${NC}"
+    echo ""
+    echo -e "${YELLOW}--- Process Details ---${NC}"
+
+    local pid
+    pid=$(systemctl show -p MainPID "$SERVICE_NAME" 2>/dev/null | cut -d= -f2)
+    if [ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null; then
+        echo -e "  PID:           ${BLUE}$pid${NC}"
+
+        local cpu_mem
+        cpu_mem=$(ps -p "$pid" -o %cpu,%mem,etime --no-headers 2>/dev/null)
+        local cpu
+        cpu=$(echo "$cpu_mem" | awk '{print $1}')
+        local mem
+        mem=$(echo "$cpu_mem" | awk '{print $2}')
+        local uptime
+        uptime=$(echo "$cpu_mem" | awk '{print $3}')
+        echo -e "  CPU Usage:     ${BLUE}${cpu:-N/A}%${NC}"
+        echo -e "  Memory Usage:  ${BLUE}${mem:-N/A}%${NC}"
+        echo -e "  Process Uptime:${BLUE}${uptime:-N/A}${NC}"
+
+        local rss
+        rss=$(ps -p "$pid" -o rss --no-headers 2>/dev/null | awk '{printf "%.1f MB", $1/1024}')
+        echo -e "  Memory (RSS):  ${BLUE}${rss:-N/A}${NC}"
+    else
+        echo -e "  PID:           ${RED}[Not Running]${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}--- Port Listening ---${NC}"
+    if [ -n "$port" ]; then
+        if ss -tlnp 2>/dev/null | grep -q ":$port "; then
+            local pid_info
+            pid_info=$(ss -tlnp 2>/dev/null | grep ":$port " | head -1)
+            echo -e "  Port $port:    ${GREEN}[Listening]${NC}"
+            echo -e "  Details:       ${BLUE}$pid_info${NC}"
+        else
+            echo -e "  Port $port:    ${RED}[Not Listening]${NC}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${YELLOW}--- Recent Logs (last 5 lines) ---${NC}"
+    journalctl -u "$SERVICE_NAME" --no-pager -n 5 2>/dev/null | tail -5 || echo -e "${YELLOW}[No log available]${NC}"
+
+    echo ""
 }
 
 change_port() {
@@ -237,6 +305,34 @@ get_domain_binding() {
         echo -e "${YELLOW}[Not bound]${NC}"
     else
         echo -e "${BLUE}$domain${NC}"
+    fi
+}
+
+get_allow_ips_status() {
+    local allow_file="$BASE_DIR/backend/data/allow_ips.json"
+    local ips
+    ips=""
+    if [ -f "$allow_file" ]; then
+        ips=$(python3 -c "import json; d=json.load(open('$allow_file')); print(d.get('ALLOW_IPS','') or '')" 2>/dev/null)
+    fi
+    if [ -z "$ips" ]; then
+        echo -e "${YELLOW}[Disabled]${NC}"
+    else
+        echo -e "${GREEN}[Enabled]${NC} ${BLUE}$ips${NC}"
+    fi
+}
+
+get_mfa_status() {
+    local mfa_file="$BASE_DIR/backend/data/mfa.json"
+    local enabled
+    enabled=""
+    if [ -f "$mfa_file" ]; then
+        enabled=$(python3 -c "import json; d=json.load(open('$mfa_file')); print('true' if d.get('MFA_ENABLED') and d.get('MFA_SECRET') else 'false')" 2>/dev/null)
+    fi
+    if [ "$enabled" = "true" ]; then
+        echo -e "${GREEN}[Enabled]${NC}"
+    else
+        echo -e "${YELLOW}[Disabled]${NC}"
     fi
 }
 
@@ -387,6 +483,60 @@ change_domain_binding() {
     esac
 }
 
+toggle_allow_ips() {
+    local allow_file="$BASE_DIR/backend/data/allow_ips.json"
+    local current_ips
+    current_ips=""
+    if [ -f "$allow_file" ]; then
+        current_ips=$(python3 -c "import json; d=json.load(open('$allow_file')); print(d.get('ALLOW_IPS','') or '')" 2>/dev/null)
+    fi
+
+    if [ -n "$current_ips" ]; then
+        echo -e "${YELLOW}Current allowed IPs: ${BLUE}$current_ips${NC}"
+        echo ""
+        read -p "Disable IP access restriction? (y/n): " confirm
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            echo '{"ALLOW_IPS":""}' > "$allow_file"
+            echo -e "${GREEN}[OK] IP access restriction disabled${NC}"
+            echo -e "${YELLOW}[Hint] Already active, no restart needed${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Current allowed IPs: ${RED}[Disabled]${NC}"
+        echo ""
+        echo -e "Enter the IP addresses to allow (comma separated, CIDR supported):"
+        read -p "e.g. 192.168.1.100 or 10.0.0.0/24,192.168.1.0/24: " new_ips
+        if [ -n "$new_ips" ]; then
+            echo "{\"ALLOW_IPS\":\"$new_ips\"}" > "$allow_file"
+            echo -e "${GREEN}[OK] IPs allowed: ${BLUE}$new_ips${NC}"
+            echo -e "${YELLOW}[Hint] Already active, no restart needed${NC}"
+        else
+            echo -e "${YELLOW}[Info] Cancelled${NC}"
+        fi
+    fi
+}
+
+toggle_mfa() {
+    local mfa_file="$BASE_DIR/backend/data/mfa.json"
+    local enabled
+    enabled=""
+    if [ -f "$mfa_file" ]; then
+        enabled=$(python3 -c "import json; d=json.load(open('$mfa_file')); print('true' if d.get('MFA_ENABLED') and d.get('MFA_SECRET') else 'false')" 2>/dev/null)
+    fi
+
+    if [ "$enabled" = "true" ]; then
+        echo -e "${YELLOW}Current MFA status: ${GREEN}[Enabled]${NC}"
+        echo ""
+        read -p "Disable MFA? (y/n): " confirm
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            echo '{"MFA_ENABLED":false,"MFA_SECRET":"","MFA_INTERVAL":30}' > "$mfa_file"
+            echo -e "${GREEN}[OK] MFA disabled${NC}"
+            echo -e "${YELLOW}[Hint] Takes effect on next login${NC}"
+        fi
+    else
+        echo -e "${YELLOW}MFA is not enabled, nothing to disable${NC}"
+    fi
+}
+
 uninstall_panel() {
     echo -e "${YELLOW}==============================${NC}"
     echo -e "${YELLOW}  Uninstall BlackPotBPanel${NC}"
@@ -437,7 +587,7 @@ main() {
     while true; do
         print_banner
         print_menu
-        read -p "Please select an option [0-9]: " choice
+        read -p "Please select an option [0-12]: " choice
         echo ""
         case $choice in
             1)
@@ -450,21 +600,30 @@ main() {
                 restart_service
                 ;;
             4)
-                change_port
+                show_service_status
                 ;;
             5)
-                toggle_ssl
+                change_port
                 ;;
             6)
-                change_admin_password
+                toggle_ssl
                 ;;
             7)
-                change_security_entrance
+                change_admin_password
                 ;;
             8)
-                change_domain_binding
+                change_security_entrance
                 ;;
             9)
+                change_domain_binding
+                ;;
+            10)
+                toggle_allow_ips
+                ;;
+            11)
+                toggle_mfa
+                ;;
+            12)
                 uninstall_panel
                 ;;
             0)

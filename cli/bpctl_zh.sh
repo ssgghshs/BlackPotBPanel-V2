@@ -84,6 +84,10 @@ print_menu() {
     entrance_status=$(get_security_entrance)
     local domain_binding_status
     domain_binding_status=$(get_domain_binding)
+    local allow_ips_status
+    allow_ips_status=$(get_allow_ips_status)
+    local mfa_status
+    mfa_status=$(get_mfa_status)
 
     echo -e "${YELLOW}面板状态信息：${NC}"
     echo "----------------------------------------"
@@ -92,21 +96,26 @@ print_menu() {
     echo -e "  SSL状态：     $ssl_status"
     echo -e "  安全入口：    $entrance_status"
     echo -e "  域名绑定：    $domain_binding_status"
+    echo -e "  授权 IP：     $allow_ips_status"
+    echo -e "  MFA 验证：    $mfa_status"
     echo -e "  安装目录：    ${BLUE}$BASE_DIR${NC}"
     echo "----------------------------------------"
     echo ""
     echo -e "${YELLOW}请选择操作：${NC}"
     echo ""
+    echo "  0) 退出"
     echo "  1) 启动面板服务"
     echo "  2) 停止面板服务"
     echo "  3) 重启面板服务"
-    echo "  4) 修改面板端口"
-    echo "  5) 开关面板 SSL"
-    echo "  6) 修改 admin 密码"
-    echo "  7) 修改面板入口"
-    echo "  8) 绑定域名"
-    echo "  9) 卸载面板"
-    echo "  0) 退出"
+    echo "  4) 查看服务状态"
+    echo "  5) 修改面板端口"
+    echo "  6) 开关面板 SSL"
+    echo "  7) 修改 admin 密码"
+    echo "  8) 修改面板入口"
+    echo "  9) 绑定域名"
+    echo "  10) 开关授权 IP"
+    echo "  11) 开关 MFA 验证"
+    echo "  12) 卸载面板"
     echo ""
 }
 
@@ -150,6 +159,65 @@ restart_service() {
             echo -e "${RED}[错误] 重启失败，请检查服务配置${NC}"
         fi
     fi
+}
+
+show_service_status() {
+    local port
+    port=$(get_current_port)
+    local state
+    state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null)
+    local enabled
+    enabled=$(systemctl is-enabled "$SERVICE_NAME" 2>/dev/null)
+
+    echo -e "${YELLOW}--- 基础状态 ---${NC}"
+    echo -e "  服务名称：    ${BLUE}$SERVICE_NAME${NC}"
+    echo -e "  运行状态：    $(get_service_status)"
+    echo -e "  开机自启：    ${GREEN}$enabled${NC}"
+    echo ""
+    echo -e "${YELLOW}--- 进程详情 ---${NC}"
+
+    local pid
+    pid=$(systemctl show -p MainPID "$SERVICE_NAME" 2>/dev/null | cut -d= -f2)
+    if [ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null; then
+        echo -e "  进程 PID：    ${BLUE}$pid${NC}"
+
+        local cpu_mem
+        cpu_mem=$(ps -p "$pid" -o %cpu,%mem,etime --no-headers 2>/dev/null)
+        local cpu
+        cpu=$(echo "$cpu_mem" | awk '{print $1}')
+        local mem
+        mem=$(echo "$cpu_mem" | awk '{print $2}')
+        local uptime
+        uptime=$(echo "$cpu_mem" | awk '{print $3}')
+        echo -e "  CPU 使用率：  ${BLUE}${cpu:-N/A}%${NC}"
+        echo -e "  内存使用率：  ${BLUE}${mem:-N/A}%${NC}"
+        echo -e "  进程运行时长：${BLUE}${uptime:-N/A}${NC}"
+
+        local rss
+        rss=$(ps -p "$pid" -o rss --no-headers 2>/dev/null | awk '{printf "%.1f MB", $1/1024}')
+        echo -e "  内存占用：    ${BLUE}${rss:-N/A}${NC}"
+    else
+        echo -e "  进程 PID：    ${RED}[未运行]${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}--- 端口监听 ---${NC}"
+    if [ -n "$port" ]; then
+        if ss -tlnp 2>/dev/null | grep -q ":$port "; then
+            local pid_info
+            pid_info=$(ss -tlnp 2>/dev/null | grep ":$port " | head -1)
+            echo -e "  端口 $port：   ${GREEN}[监听中]${NC}"
+            echo -e "  详细信息：    ${BLUE}$pid_info${NC}"
+        else
+            echo -e "  端口 $port：   ${RED}[未监听]${NC}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${YELLOW}--- 最近日志（最后 5 条）---${NC}"
+    journalctl -u "$SERVICE_NAME" --no-pager -n 5 2>/dev/null | tail -5 || echo -e "${YELLOW}[暂无日志]${NC}"
+
+    echo ""
 }
 
 change_port() {
@@ -237,6 +305,34 @@ get_domain_binding() {
         echo -e "${YELLOW}[未绑定]${NC}"
     else
         echo -e "${BLUE}$domain${NC}"
+    fi
+}
+
+get_allow_ips_status() {
+    local allow_file="$BASE_DIR/backend/data/allow_ips.json"
+    local ips
+    ips=""
+    if [ -f "$allow_file" ]; then
+        ips=$(python3 -c "import json; d=json.load(open('$allow_file')); print(d.get('ALLOW_IPS','') or '')" 2>/dev/null)
+    fi
+    if [ -z "$ips" ]; then
+        echo -e "${YELLOW}[未开启]${NC}"
+    else
+        echo -e "${GREEN}[已开启]${NC} ${BLUE}$ips${NC}"
+    fi
+}
+
+get_mfa_status() {
+    local mfa_file="$BASE_DIR/backend/data/mfa.json"
+    local enabled
+    enabled=""
+    if [ -f "$mfa_file" ]; then
+        enabled=$(python3 -c "import json; d=json.load(open('$mfa_file')); print('true' if d.get('MFA_ENABLED') and d.get('MFA_SECRET') else 'false')" 2>/dev/null)
+    fi
+    if [ "$enabled" = "true" ]; then
+        echo -e "${GREEN}[已开启]${NC}"
+    else
+        echo -e "${YELLOW}[未开启]${NC}"
     fi
 }
 
@@ -387,6 +483,60 @@ change_domain_binding() {
     esac
 }
 
+toggle_allow_ips() {
+    local allow_file="$BASE_DIR/backend/data/allow_ips.json"
+    local current_ips
+    current_ips=""
+    if [ -f "$allow_file" ]; then
+        current_ips=$(python3 -c "import json; d=json.load(open('$allow_file')); print(d.get('ALLOW_IPS','') or '')" 2>/dev/null)
+    fi
+
+    if [ -n "$current_ips" ]; then
+        echo -e "${YELLOW}当前授权 IP：${BLUE}$current_ips${NC}"
+        echo ""
+        read -p "是否关闭授权 IP 限制？（输入 y 清空）(y/n): " confirm
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            echo '{"ALLOW_IPS":""}' > "$allow_file"
+            echo -e "${GREEN}[成功] 已关闭授权 IP 限制${NC}"
+            echo -e "${YELLOW}[提示] 已立即生效，无需重启服务${NC}"
+        fi
+    else
+        echo -e "${YELLOW}当前授权 IP：${RED}[未开启]${NC}"
+        echo ""
+        echo -e "请输入要授权的 IP 地址（多个用逗号分隔，支持 CIDR）："
+        read -p "例如: 192.168.1.100 或 10.0.0.0/24,192.168.1.0/24: " new_ips
+        if [ -n "$new_ips" ]; then
+            echo "{\"ALLOW_IPS\":\"$new_ips\"}" > "$allow_file"
+            echo -e "${GREEN}[成功] 已设置授权 IP：${BLUE}$new_ips${NC}"
+            echo -e "${YELLOW}[提示] 已立即生效，无需重启服务${NC}"
+        else
+            echo -e "${YELLOW}[信息] 已取消${NC}"
+        fi
+    fi
+}
+
+toggle_mfa() {
+    local mfa_file="$BASE_DIR/backend/data/mfa.json"
+    local enabled
+    enabled=""
+    if [ -f "$mfa_file" ]; then
+        enabled=$(python3 -c "import json; d=json.load(open('$mfa_file')); print('true' if d.get('MFA_ENABLED') and d.get('MFA_SECRET') else 'false')" 2>/dev/null)
+    fi
+
+    if [ "$enabled" = "true" ]; then
+        echo -e "${YELLOW}当前 MFA 状态：${GREEN}[已开启]${NC}"
+        echo ""
+        read -p "是否关闭 MFA 验证？(y/n): " confirm
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            echo '{"MFA_ENABLED":false,"MFA_SECRET":"","MFA_INTERVAL":30}' > "$mfa_file"
+            echo -e "${GREEN}[成功] MFA 验证已关闭${NC}"
+            echo -e "${YELLOW}[提示] 下次登录生效${NC}"
+        fi
+    else
+        echo -e "${YELLOW}MFA 验证当前未开启，无需关闭${NC}"
+    fi
+}
+
 uninstall_panel() {
     echo -e "${YELLOW}==============================${NC}"
     echo -e "${YELLOW}  卸载 BlackPotBPanel 面板${NC}"
@@ -437,7 +587,7 @@ main() {
     while true; do
         print_banner
         print_menu
-        read -p "请输入选项 [0-9]: " choice
+        read -p "请输入选项 [0-12]: " choice
         echo ""
         case $choice in
             1)
@@ -450,21 +600,30 @@ main() {
                 restart_service
                 ;;
             4)
-                change_port
+                show_service_status
                 ;;
             5)
-                toggle_ssl
+                change_port
                 ;;
             6)
-                change_admin_password
+                toggle_ssl
                 ;;
             7)
-                change_security_entrance
+                change_admin_password
                 ;;
             8)
-                change_domain_binding
+                change_security_entrance
                 ;;
             9)
+                change_domain_binding
+                ;;
+            10)
+                toggle_allow_ips
+                ;;
+            11)
+                toggle_mfa
+                ;;
+            12)
                 uninstall_panel
                 ;;
             0)
