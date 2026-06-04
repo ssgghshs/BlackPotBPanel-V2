@@ -129,7 +129,7 @@ export function downloadFile(params) {
     // 构建下载URL
     let url = '/api/v2/file/download?';
     
-    // 构建查询参数
+    // 构建查询参数 - 不再需要token，由Cookie自动携带
     const queryParams = new URLSearchParams();
     if (params.path) {
         queryParams.append('path', params.path);
@@ -138,14 +138,8 @@ export function downloadFile(params) {
         queryParams.append('filename', params.filename);
     }
     
-    // 从localStorage获取token并添加到URL
-    const token = localStorage.getItem('access_token');
-    if (token) {
-        queryParams.append('token', token);
-    }
-    
     // 使用window.open直接打开下载链接，实现流式下载
-    // 这样用户可以复制下载链接并在其他浏览器窗口中使用
+    // 浏览器的Cookie会自动附带同源请求，无需手动传递token
     window.open(url + queryParams.toString(), '_blank');
     
     return { success: true };

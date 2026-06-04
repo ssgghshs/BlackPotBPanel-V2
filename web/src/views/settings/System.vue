@@ -351,6 +351,9 @@
       <a-form-item :label="t('securityEntrance') + ':'" class="form-item">
         <a-input v-model="entranceValue" :placeholder="t('entranceInputHelper')" />
       </a-form-item>
+      <div style="margin: -8px 0 12px 0;">
+        <a-button type="primary" size="small" @click="handleGenerateEntrance">{{ t('generate') }}</a-button>
+      </div>
       <p class="entrance-hint">{{ t('entranceHelper') }}</p>
     </a-modal>
 
@@ -1413,6 +1416,16 @@ const cancelSSLClose = () => {
 const showEntranceDialog = () => {
   entranceValue.value = systemConfig.SECURITY_ENTRANCE || '';
   entranceModalVisible.value = true;
+};
+
+const handleGenerateEntrance = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const length = Math.floor(Math.random() * 8) + 8; // 8-15位随机长度
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  entranceValue.value = result;
 };
 
 const confirmEntranceChange = async () => {

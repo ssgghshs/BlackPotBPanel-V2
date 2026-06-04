@@ -5,6 +5,7 @@ const service = axios.create({
   baseURL: '/api/v2', // 根据项目规范，设置为本地开发环境地址
   timeout: 600000, // 增加超时时间到10分钟，以适应大文件上传
   maxBodyLength: 1024 * 1024 * 1024, // 允许1GB的请求体大小
+  withCredentials: true, // 跨域请求携带Cookie（用于httpOnly Cookie认证）
   headers: {
     // 避免设置content-type，让浏览器自动处理multipart/form-data格式
   }

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from config.database import get_db
 from app.user import schemas, service
 from middleware.auth import get_current_active_user
+from config.settings import settings
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -27,13 +28,35 @@ async def get_captcha():
 
 
 @router.post("/login", response_model=schemas.TokenWithDefaultPasswordCheck)
-async def login(request: Request, form_data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
-    return await service.login(request, form_data, db)
+async def login(request: Request, response: Response, form_data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
+    result = await service.login(request, form_data, db)
+    access_token = result.get("access_token", "")
+    if access_token:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            samesite="lax",
+            path="/",
+        )
+    return result
 
 
 @router.post("/login/mfa", response_model=schemas.TokenWithDefaultPasswordCheck)
-async def mfa_login(request: Request, form_data: schemas.MFALogin, db: AsyncSession = Depends(get_db)):
-    return await service.mfa_login(request, form_data, db)
+async def mfa_login(request: Request, response: Response, form_data: schemas.MFALogin, db: AsyncSession = Depends(get_db)):
+    result = await service.mfa_login(request, form_data, db)
+    access_token = result.get("access_token", "")
+    if access_token:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            samesite="lax",
+            path="/",
+        )
+    return result
 
 
 @router.get("/me", response_model=schemas.UserResponse)
@@ -109,6 +132,9 @@ async def change_password(
 @router.post("/logout")
 async def logout(
     request: Request,
+    response: Response,
     current_user=Depends(get_current_active_user)
 ):
-    return await service.logout(request, current_user)
+    result = await service.logout(request, current_user)
+    response.delete_cookie(key="access_token", path="/")
+    return result

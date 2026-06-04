@@ -111,7 +111,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     if not token:
         token = request.query_params.get("token")
     
-    # 3. 如果仍然没有token，抛出异常
+    # 3. 如果仍然没有token，尝试从Cookie中获取
+    if not token:
+        token = request.cookies.get("access_token")
     if not token:
         raise credentials_exception
     
