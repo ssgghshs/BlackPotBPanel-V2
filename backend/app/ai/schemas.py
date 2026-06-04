@@ -131,6 +131,11 @@ class AiConversationUpdate(BaseModel):
     status: Optional[int] = None
 
 
+class AiConversationSwitchModel(BaseModel):
+    model_id: int
+    model_name: str
+
+
 class AiConversation(AiConversationBase):
     id: int
     status: int
@@ -184,4 +189,5 @@ class AiStreamChatRequest(BaseModel):
     message: str
     system_prompt: Optional[str] = None
     temperature: Optional[float] = 0.7
+    smart_mode: bool = False
     max_tokens: Optional[int] = None

@@ -179,6 +179,33 @@ async def update_conversation(
     return conversation
 
 
+async def update_conversation_model(
+    db: AsyncSession,
+    conversation_id: int,
+    model_id: int,
+    model_name: str,
+) -> Optional[models.AiConversation]:
+    conversation = await get_conversation(db, conversation_id)
+    if not conversation:
+        return None
+
+    # 模型变化时，清除旧模型的回复消息
+    if conversation.model_id != model_id:
+        await db.execute(
+            delete(models.AiMessage).where(
+                models.AiMessage.conversation_id == conversation_id,
+                models.AiMessage.role == 'assistant',
+            )
+        )
+        conversation.token_usage_prompt = 0
+        conversation.token_usage_completion = 0
+
+    conversation.model_id = model_id
+    conversation.model_name = model_name
+    await db.flush()
+    return conversation
+
+
 async def delete_conversation(db: AsyncSession, conversation_id: int) -> bool:
     conversation = await get_conversation(db, conversation_id)
     if not conversation:
@@ -294,6 +321,18 @@ async def stream_chat_with_model(
         raise ValueError('模型不存在')
     if not model_config.is_enabled:
         raise ValueError('模型未启用')
+
+    # 智能模式：自动使用默认模型
+    if request.smart_mode:
+        default_models, _ = await get_model_configs(db, is_enabled=1, limit=1)
+        default_model = None
+        # 优先找 is_default 的模型
+        for m in default_models:
+            if m.is_default:
+                default_model = m
+                break
+        if default_model and default_model.id != request.model_id:
+            model_config = default_model
 
     # 创建或获取对话
     conversation_id = request.conversation_id

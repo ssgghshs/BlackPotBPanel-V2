@@ -165,6 +165,22 @@ async def update_ai_conversation(
     return conversation
 
 
+@router.post("/conversations/{conversation_id}/switch-model", response_model=schemas.AiConversation)
+async def switch_conversation_model(
+    conversation_id: int,
+    req: schemas.AiConversationSwitchModel,
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_ai_db),
+):
+    """切换对话使用的模型"""
+    conversation = await service.update_conversation_model(
+        db, conversation_id, req.model_id, req.model_name
+    )
+    if not conversation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="对话不存在")
+    return conversation
+
+
 @router.post("/conversations/{conversation_id}/delete")
 async def delete_ai_conversation(
     conversation_id: int,
