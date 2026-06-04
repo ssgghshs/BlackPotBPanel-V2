@@ -384,6 +384,48 @@ async def restart_service() -> Dict[str, str]:
         raise Exception(f"重启服务失败: {str(e)}")
 
 
+async def reboot_server() -> Dict[str, str]:
+    """
+    重启服务器操作系统
+    执行 reboot 命令重启整个服务器
+    """
+    try:
+        logger.info("准备重启服务器...")
+
+        async def delayed_reboot():
+            await asyncio.sleep(1)
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    "/usr/sbin/reboot",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await process.communicate()
+                logger.info("服务器重启命令已执行")
+            except FileNotFoundError:
+                # 如果 /usr/sbin/reboot 不存在，尝试直接找 reboot
+                process = await asyncio.create_subprocess_exec(
+                    "reboot",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await process.communicate()
+                logger.info("The server restart command has been sent")
+            except Exception as e:
+                logger.error(f"Sending reboot command failed: {str(e)}")
+
+        asyncio.create_task(delayed_reboot())
+
+        return {
+            "status": "success",
+            "message": "The server restart command has been sent, and the server will restart in 1 second"
+        }
+
+    except Exception as e:
+        logger.error(f"发送重启服务器命令时发生错误: {str(e)}")
+        raise Exception(f"Sending reboot command failed: {str(e)}")
+
+
 def get_ssl_cert_content() -> Dict[str, str]:
     """
     获取SSL证书和私钥文件内容

@@ -78,6 +78,9 @@ class MergedPortRuleItem(BaseModel):
     addtime: str = Field("--", description="添加时间")
     status: int = Field(-1, description="-1:无法检测,0:未监听,2:监听中")
     stype: str = Field("0", description="0:系统原生规则,1:面板托管规则")
+    process_name: Optional[str] = Field(None, description="占用进程名称")
+    process_pid: Optional[int] = Field(None, description="占用进程PID")
+    process_cmd: Optional[str] = Field(None, description="占用进程启动命令行")
 
 
 class MergedPortRuleList(BaseModel):

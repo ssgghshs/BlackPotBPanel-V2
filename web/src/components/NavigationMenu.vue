@@ -284,12 +284,25 @@ export default {
 :deep(.arco-menu-item) {
   border-radius: 12px !important;
   margin: 6px 12px !important;
-  padding: 6px 16px !important; /* 调整垂直padding从12px到6px */
+  padding: 6px 16px !important;
   transition: all 0.3s ease !important;
   background-color: var(--color-bg-2) !important;
   border: 1px solid var(--color-border-2) !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
-  min-height: 32px; /* 调整最小高度从40px到32px */
+  min-height: 44px !important;
+  height: auto !important;
+}
+
+/* 菜单项文本 - 支持两行显示 */
+:deep(.arco-menu-item) > span:last-child:not(:only-child) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  white-space: normal !important;
+  word-break: break-all;
+  line-height: 1.3 !important;
+  font-size: 12px !important;
 }
 
 /* 收起状态下的菜单项样式 */

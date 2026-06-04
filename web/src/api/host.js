@@ -166,6 +166,13 @@ export function updateSSHConfig(data) {
   })
 }
 
+//获取SSH登录入侵统计信息
+export function getSSHIntrusionInfo() {
+  return request('/host/ssh/info', {
+    method: 'GET',
+  })
+}
+
 
 // 操作本机SSH服务
 export function operateLocalSSHService(data) {

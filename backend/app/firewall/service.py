@@ -4,8 +4,9 @@ import json
 import asyncio
 import socket
 import shutil
+import psutil
 from datetime import datetime
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
@@ -187,6 +188,32 @@ class FirewallService:
             return 0
 
     @classmethod
+    def _get_process_info_by_port(cls, port: str) -> Dict[str, Any]:
+        """根据端口号查询占用进程的名称、PID和命令行"""
+        if ":" in port or "-" in port:
+            return {}
+        try:
+            port_int = int(port)
+            for conn in psutil.net_connections(kind='tcp'):
+                if conn.status == 'LISTEN' and conn.laddr.port == port_int:
+                    if conn.pid:
+                        try:
+                            proc = psutil.Process(conn.pid)
+                            cmdline = proc.cmdline()
+                            cmd_str = ' '.join(cmdline) if cmdline else ''
+                            return {
+                                "process_name": proc.name(),
+                                "process_pid": conn.pid,
+                                "process_cmd": cmd_str,
+                            }
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                    return {}
+            return {}
+        except (ValueError, psutil.Error):
+            return {}
+
+    @classmethod
     async def get_port_rules(
         cls, db: AsyncSession, skip: int = 0, limit: int = 100, query: str = ""
     ) -> Tuple[List[MergedPortRuleItem], int]:
@@ -222,6 +249,8 @@ class FirewallService:
 
             db_rule = db_index.get(match_key)
             if db_rule:
+                status = cls._check_port_status(port, protocol)
+                proc_info = cls._get_process_info_by_port(port) if status == 2 else {}
                 merged.append(MergedPortRuleItem(
                     id=db_rule.id,
                     port=port,
@@ -231,18 +260,22 @@ class FirewallService:
                     chain=chain,
                     brief=db_rule.brief or "",
                     addtime=db_rule.addtime.strftime("%Y-%m-%d %H:%M:%S") if db_rule.addtime else "--",
-                    status=cls._check_port_status(port, protocol),
+                    status=status,
                     stype="1",
+                    **proc_info,
                 ))
             else:
+                status = cls._check_port_status(port, protocol)
+                proc_info = cls._get_process_info_by_port(port) if status == 2 else {}
                 merged.append(MergedPortRuleItem(
                     port=port,
                     protocol=protocol,
                     strategy=strategy,
                     address=address,
                     chain=chain,
-                    status=cls._check_port_status(port, protocol),
+                    status=status,
                     stype="0",
+                    **proc_info,
                 ))
 
         for r in db_rules:
@@ -250,6 +283,8 @@ class FirewallService:
                 r.port, r.protocol, r.strategy, r.address, r.chain
             ).lower()
             if match_key not in seen_keys:
+                status = cls._check_port_status(r.port, r.protocol)
+                proc_info = cls._get_process_info_by_port(r.port) if status == 2 else {}
                 merged.append(MergedPortRuleItem(
                     id=r.id,
                     port=r.port,
@@ -259,8 +294,9 @@ class FirewallService:
                     chain=r.chain,
                     brief=r.brief or "",
                     addtime=r.addtime.strftime("%Y-%m-%d %H:%M:%S") if r.addtime else "--",
-                    status=cls._check_port_status(r.port, r.protocol),
+                    status=status,
                     stype="1",
+                    **proc_info,
                 ))
 
         merged.sort(key=lambda x: x.addtime, reverse=True)

@@ -29,9 +29,17 @@
         :table-layout-fixed="true"
       >
         <template #status="{ record }">
-          <a-tag v-if="record.status === 2" color="green">{{ t('listening') }}</a-tag>
-          <a-tag v-else-if="record.status === 0" color="red">{{ t('notListening') }}</a-tag>
-          <a-tag v-else color="gray">{{ t('cannotDetect') }}</a-tag>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <a-tag v-if="record.status === 2" color="green">{{ t('listening') }}</a-tag>
+            <a-tag v-else-if="record.status === 0" color="red">{{ t('notListening') }}</a-tag>
+            <a-tag v-else color="gray">{{ t('cannotDetect') }}</a-tag>
+            <a-link
+              v-if="record.status === 2 && (record.process_name || record.process_pid || record.process_cmd)"
+              type="text"
+              size="small"
+              @click="showProcessDetail(record)"
+            >({{ t('detail') }})</a-link>
+          </div>
         </template>
         <template #stype="{ record }">
           <a-tag v-if="record.stype === '1'" color="blue">{{ t('panelRule') }}</a-tag>
@@ -66,6 +74,26 @@
         {{ deleteTarget.port }}/{{ deleteTarget.protocol }} - {{ deleteTarget.brief || t('brief') }}
       </p>
     </a-modal>
+
+    <a-drawer
+      :visible="showProcessDetailDialog"
+      :title="t('processDetail')"
+      :width="isMobile ? '90%' : 600"
+      @cancel="showProcessDetailDialog = false"
+      :footer="false"
+    >
+      <a-descriptions v-if="processDetailData" :column="1" bordered size="medium">
+        <a-descriptions-item :label="t('processName')">
+          {{ processDetailData.process_name || '--' }}
+        </a-descriptions-item>
+        <a-descriptions-item :label="t('processPid')">
+          {{ processDetailData.process_pid ?? '--' }}
+        </a-descriptions-item>
+        <a-descriptions-item :label="t('processCmd')">
+          <div style="word-break: break-all; white-space: pre-wrap;">{{ processDetailData.process_cmd || '--' }}</div>
+        </a-descriptions-item>
+      </a-descriptions>
+    </a-drawer>
 
     <a-drawer
       :visible="showAddDialog"
@@ -155,6 +183,18 @@ const pagination = reactive({
 });
 
 const scroll = { x: 'max-content', y: 600 };
+
+const showProcessDetailDialog = ref(false);
+const processDetailData = ref(null);
+
+const showProcessDetail = (record) => {
+  processDetailData.value = {
+    process_name: record.process_name || null,
+    process_pid: record.process_pid ?? null,
+    process_cmd: record.process_cmd || null,
+  };
+  showProcessDetailDialog.value = true;
+};
 
 const columns = computed(() => [
   { title: t.value('port'), dataIndex: 'port', key: 'port', width: 100 },

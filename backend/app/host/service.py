@@ -435,6 +435,64 @@ async def get_local_authorized_keys_file() -> schemas.SSHAuthKeysFile:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def get_ssh_intrusion_info() -> schemas.SSHIntrusionInfo:
+    """获取SSH登录入侵统计信息
+    
+    统计SSH登录日志中的成功/失败次数，包括累计和今天的数据。
+    
+    Returns:
+        schemas.SSHIntrusionInfo: 包含错误/成功次数的统计信息
+    """
+    import subprocess
+    import os
+    from datetime import datetime
+
+    # 确定日志文件路径
+    if os.path.exists("/var/log/auth.log"):
+        log_path = "/var/log/auth.log"
+        today_str = datetime.now().strftime("%Y-%m-%d")
+    elif os.path.exists("/var/log/secure"):
+        log_path = "/var/log/secure"
+        today_str = datetime.now().strftime("%b %d").lstrip("0").replace(" 0", " ")
+    else:
+        log_path = "/var/log/message"
+        today_str = datetime.now().strftime("%b %d").lstrip("0").replace(" 0", " ")
+
+    def _run_count(pattern: str, today_only: bool = False) -> int:
+        """同步执行shell命令统计匹配行数"""
+        cmd = (
+            f"ls -tr {log_path}* | grep -v '\\.gz$' | xargs cat 2>/dev/null"
+            f" | grep -aE '({pattern})'"
+        )
+        if today_only:
+            cmd += f" | grep -a '{today_str}'"
+        cmd += " | wc -l"
+        try:
+            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+            return int(proc.stdout.strip())
+        except (ValueError, subprocess.TimeoutExpired, OSError):
+            return 0
+
+    try:
+        loop = asyncio.get_event_loop()
+        error, success, today_error, today_success = await asyncio.gather(
+            loop.run_in_executor(None, _run_count, "Failed password"),
+            loop.run_in_executor(None, _run_count, "Accepted"),
+            loop.run_in_executor(None, _run_count, "Failed password", True),
+            loop.run_in_executor(None, _run_count, "Accepted", True),
+        )
+
+        return schemas.SSHIntrusionInfo(
+            error=error or 0,
+            success=success or 0,
+            today_error=today_error or 0,
+            today_success=today_success or 0,
+        )
+    except Exception as e:
+        logger.error(f"获取SSH入侵统计信息失败: {e}")
+        return schemas.SSHIntrusionInfo()
+
+
 async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
     """获取SSH登录日志
     

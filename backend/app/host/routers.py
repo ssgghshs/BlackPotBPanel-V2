@@ -654,6 +654,26 @@ async def get_local_authorized_keys_file_content(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/ssh/info", response_model=schemas.SSHIntrusionInfo)
+async def get_ssh_intrusion_info(
+    db: AsyncSession = Depends(get_db),
+    current_user: user_models.User = Depends(get_current_active_user)
+):
+    """获取SSH登录入侵统计信息
+
+    统计SSH登录日志中的成功/失败次数，包括：
+    - error: 累计失败次数
+    - success: 累计成功次数
+    - today_error: 今天失败次数
+    - today_success: 今天成功次数
+    """
+    try:
+        return await service.get_ssh_intrusion_info()
+    except Exception as e:
+        logger.error(f"获取SSH入侵统计信息失败: {e}")
+        raise HTTPException(status_code=500, detail="获取SSH入侵统计信息失败")
+
+
 @router.post("/ssh/set", response_model=schemas.SSHServiceOperationResponse)
 async def operate_ssh_service(
     operation: schemas.SSHServiceOperation,

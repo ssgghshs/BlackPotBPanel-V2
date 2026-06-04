@@ -159,12 +159,12 @@ async def update_recycle_config(
             detail="更新回收站配置失败"
         )
 
-@router.post("/restart", response_model=schemas.ServiceRestartResponse)
+@router.post("/panel/restart", response_model=schemas.ServiceRestartResponse)
 async def restart_service(
     current_user = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """重启服务"""
+    """重启服务（面板服务自身）"""
     try:
         # 检查是否为管理员
         if current_user.role != RoleEnum.ADMIN.value:
@@ -190,6 +190,49 @@ async def restart_service(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"重启服务失败: {str(e)}"
         )
+
+
+@router.post("/reboot", response_model=schemas.ServiceRestartResponse)
+async def reboot_server(
+    current_user = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """重启服务器操作系统（整个服务器）"""
+    try:
+        # 检查是否为管理员
+        if current_user.role != RoleEnum.ADMIN.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有管理员可以重启服务器"
+            )
+
+        # 执行服务器重启逻辑
+        result = await service.reboot_server()
+
+        logger.info(f"服务器重启命令已发送，结果: {result}")
+        return schemas.ServiceRestartResponse(
+            message=result.get("message", "服务器重启命令已发送"),
+            status=result.get("status", "success")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"重启服务器失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"重启服务器失败: {str(e)}"
+        )
+
+
+@router.get("/reboot/status")
+async def reboot_status():
+    """检测服务器是否已重启成功
+
+    前端在调用 reboot 接口后，可轮询此接口：
+    - 服务器重启中 → 请求失败（连接被拒绝）
+    - 服务器已恢复 → 返回 200 OK
+    """
+    return {"status": "online", "message": "Server is running normally"}
 
 
 @router.get("/config/ssl", response_model=schemas.SSLCertResponse)

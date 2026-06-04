@@ -13,6 +13,11 @@ from init.appinit import run_initialization
 
 # 只在主进程中执行初始化操作
 if __name__ == "__main__" and not os.environ.get("UVICORN_RELOAD_WORKER"):
+    try:
+        import setproctitle
+        setproctitle.setproctitle("BlackPotBPanel")
+    except ImportError:
+        pass
     # 先初始化日志配置
     logging.config.dictConfig(LOGGING_CONFIG)
     # 再执行所有初始化操作
@@ -33,6 +38,12 @@ app.add_middleware(
 
 
 if __name__ == "__main__":
+    try:
+        import setproctitle
+        setproctitle.setproctitle("BlackPotBPanel")
+    except ImportError:
+        pass
+
     # 初始化日志配置
     logging.config.dictConfig(LOGGING_CONFIG)
     

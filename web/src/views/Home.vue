@@ -7,16 +7,21 @@
         </ul>
         <!-- 右侧功能区域 -->
         <div class="right-section">
-          <!-- 面板资源占用 -->
+          <!-- 重启按钮 -->
+        <a-dropdown @select="handlePoweroffSelect" trigger="click">
+          <icon-poweroff size="20" style="cursor: pointer" />
+          <template #content>
+            <a-doption value="restart-panel">{{ t('restartPanel') }}</a-doption>
+            <a-doption value="reboot-server">{{ t('rebootServer') }}</a-doption>
+          </template>
+        </a-dropdown>
+                   <!-- 面板资源占用 -->
           <PanelResource :title="t('panelResource')" />
-          
 
           <!-- 语言切换图标按钮 -->
           <div class="language-switch">
             <a-dropdown @select="handleLanguageSelect">
-              <a-button size="mini" type="text" class="language-button">
                 <icon-language class="language-icon" />
-              </a-button>
               <template #content>
                 <a-doption value="zh-CN">简体中文</a-doption>
                 <a-doption value="en-US">English</a-doption>
@@ -62,6 +67,40 @@
   </div>
 
   <!-- 修改密码弹窗 -->
+  <!-- 重启面板确认对话框 -->
+  <a-modal
+    :visible="showRestartPanelModal"
+    :title="t('restartPanel')"
+    @ok="handleConfirmRestartPanel"
+    @cancel="showRestartPanelModal = false"
+    :ok-text="t('confirm')"
+    :cancel-text="t('cancel')"
+  >
+    <p>{{ t('confirmRestartPanel') }}</p>
+  </a-modal>
+
+  <!-- 重启服务器确认对话框 -->
+  <a-modal
+    :visible="showRebootServerModal"
+    :title="t('rebootServer')"
+    @ok="handleConfirmRebootServer"
+    @cancel="showRebootServerModal = false"
+    :ok-button-props="{ disabled: !rebootMathPassed }"
+    :ok-text="t('confirm')"
+    :cancel-text="t('cancel')"
+  >
+    <p>{{ t('confirmRebootServer') }}</p>
+    <div class="math-verify" style="margin-top: 16px;">
+      <span style="margin-right: 8px;">{{ rebootMathA }} + {{ rebootMathB }} = ?</span>
+      <a-input
+        v-model="rebootMathAnswer"
+        :placeholder="t('pleaseEnterResult')"
+        style="width: 100px; display: inline-block;"
+        @input="checkRebootMath"
+      />
+    </div>
+  </a-modal>
+
   <a-modal
     :visible="showChangePasswordModal"
     :title="t('changePassword')"
@@ -90,16 +129,23 @@
     </a-form>
   </a-modal>
   <!-- 页脚 -->
+  <!-- 重启中覆盖层 -->
+  <div v-if="showRebootOverlay" class="reboot-overlay">
+    <div class="reboot-overlay-content">
+      <a-spin :size="48" />
+      <p class="reboot-overlay-text">{{ t('rebooting') }}</p>
+    </div>
+  </div>
   <Footer/>
 </template>
 
 <script setup>
 import { t,changeLocale } from '../utils/locale';
-import { IconLanguage, IconUser } from '@arco-design/web-vue/es/icon';
+import { IconLanguage, IconUser, IconPoweroff } from '@arco-design/web-vue/es/icon';
 import { Button, Message, Modal, Dropdown } from '@arco-design/web-vue';
 import { ref, onMounted, reactive, computed, onBeforeUnmount } from 'vue';
 import { getCurrentUser, changePassword } from '../api/user';
-import { updateCommonSettings } from '../api/system';
+import { updateCommonSettings, restartService, rebootServer, rebootStatus } from '../api/system';
 import PanelResource from '../components/monitor/PanelResource.vue';
 import Footer from '../components/Footer.vue'
 import * as echarts from 'echarts5';
@@ -135,6 +181,30 @@ let networkChart = null;
 // 修改密码弹窗相关
 const showChangePasswordModal = ref(false);
 const passwordFormRef = ref();
+
+// 重启面板确认对话框
+const showRestartPanelModal = ref(false);
+// 重启服务器确认对话框
+const showRebootServerModal = ref(false);
+// 重启中覆盖层
+const showRebootOverlay = ref(false);
+// 加减法验证
+const rebootMathA = ref(0);
+const rebootMathB = ref(0);
+const rebootMathAnswer = ref('');
+const rebootMathPassed = ref(false);
+
+const generateRebootMath = () => {
+  rebootMathA.value = Math.floor(Math.random() * 50) + 10;
+  rebootMathB.value = Math.floor(Math.random() * 50) + 10;
+  rebootMathAnswer.value = '';
+  rebootMathPassed.value = false;
+};
+
+const checkRebootMath = () => {
+  const result = parseInt(rebootMathAnswer.value, 10);
+  rebootMathPassed.value = !isNaN(result) && result === rebootMathA.value + rebootMathB.value;
+};
 
 const passwordForm = reactive({
   newPassword: '',
@@ -309,6 +379,61 @@ const handleLanguageSelect = async (value) => {
   } catch (error) {
     console.error('更新语言设置失败:', error);
     // 语言更新失败不影响前端显示，因为我们已经在前端切换了语言
+  }
+};
+
+// 电源下拉菜单选择处理
+const handlePoweroffSelect = async (value) => {
+  if (value === 'restart-panel') {
+    showRestartPanelModal.value = true;
+  } else if (value === 'reboot-server') {
+    generateRebootMath();
+    showRebootServerModal.value = true;
+  }
+};
+
+// 确认重启面板
+const handleConfirmRestartPanel = async () => {
+  showRestartPanelModal.value = false;
+  try {
+    await restartService();
+    Message.success(t.value('操作成功，面板正在重启...'));
+  } catch (error) {
+    Message.error(t.value('重启面板失败') + ': ' + (error.message || ''));
+  }
+};
+
+// 确认重启服务器
+const handleConfirmRebootServer = async () => {
+  showRebootServerModal.value = false;
+  try {
+    await rebootServer();
+    // 显示重启中覆盖层
+    showRebootOverlay.value = true;
+
+    // 轮询检测服务器是否重启成功
+    let retryCount = 0;
+    const maxRetries = 120; // 最多等 10 分钟（5 秒一次）
+    const poll = async () => {
+      retryCount++;
+      try {
+        await rebootStatus();
+        // 重启成功，刷新页面
+        window.location.reload();
+      } catch {
+        if (retryCount < maxRetries) {
+          setTimeout(poll, 5000);
+        } else {
+          showRebootOverlay.value = false;
+          Message.error(t.value('服务器重启检测超时，请手动刷新页面'));
+        }
+      }
+    };
+    // 等几秒再开始轮询（让服务器有时间开始关闭）
+    setTimeout(poll, 8000);
+  } catch (error) {
+    showRebootOverlay.value = false;
+    Message.error(t.value('重启服务器失败') + ': ' + (error.message || ''));
   }
 };
 
@@ -685,5 +810,33 @@ body[arco-theme="dark"] .three-container {
   .three-container {
     padding: 20px;
   }
+}
+
+/* 重启中覆盖层 */
+.reboot-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.reboot-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.reboot-overlay-text {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0;
 }
 </style>

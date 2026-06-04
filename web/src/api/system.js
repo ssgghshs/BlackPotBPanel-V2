@@ -43,13 +43,31 @@ export function updateCommonSettings(data) {
 }
 
 
-// 重启服务
+// 重启服务（面板服务自身）
 export function restartService() {
   return request({
-    url: '/system/restart',
+    url: '/system/panel/restart',
     method: 'post'
   })
 }
+
+//重启服务器操作系统（整个服务器）
+export function rebootServer() {
+  return request({
+    url: '/system/reboot',
+    method: 'post'
+  })
+}
+
+// 检测服务器是否已重启成功
+export function rebootStatus() {
+  return request({
+    url: '/system/reboot/status',
+    method: 'get'
+  })
+}
+
+
 
 // 获取SSL证书内容
 export function getSSLCert() {

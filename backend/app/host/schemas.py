@@ -168,6 +168,14 @@ class SSHLogCleanupResponse(BaseModel):
     cleaned_count: Optional[int] = Field(default=None, description="已清理的日志数量")
 
 
+class SSHIntrusionInfo(BaseModel):
+    """SSH登录入侵统计信息"""
+    error: int = Field(0, description="累计失败次数")
+    success: int = Field(0, description="累计成功次数")
+    today_error: int = Field(0, description="今天失败次数")
+    today_success: int = Field(0, description="今天成功次数")
+
+
 # 远程文件相关 Pydantic 模型
 class RemoteFileInfo(BaseModel):
     """远程主机文件信息模型"""

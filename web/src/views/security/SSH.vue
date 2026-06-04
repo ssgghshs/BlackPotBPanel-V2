@@ -17,8 +17,28 @@
             {{ t('start') }}
           </a-link>
         </div>
+            <!-- 获取SSH登录入侵统计信息 -->
+        <div class="ssh-intrusion-stats" v-if="intrusionInfo">
+          <span class="stat-item stat-failed">
+            <span class="stat-label">{{ t('totalFailed') }}</span>
+            <span class="stat-value">{{ intrusionInfo.error }}</span>
+          </span>
+          <span class="stat-item stat-success">
+            <span class="stat-label">{{ t('totalSuccess') }}</span>
+            <span class="stat-value">{{ intrusionInfo.success }}</span>
+          </span>
+          <span class="stat-item stat-failed">
+            <span class="stat-label">{{ t('todayFailed') }}</span>
+            <span class="stat-value">{{ intrusionInfo.today_error }}</span>
+          </span>
+          <span class="stat-item stat-success">
+            <span class="stat-label">{{ t('todaySuccess') }}</span>
+            <span class="stat-value">{{ intrusionInfo.today_success }}</span>
+          </span>
+        </div>
       </div>
     </template>
+
 
     <!--  内容区域  -->
     <a-tabs v-model:active-key="activeTab" default-active-key="1" position="left" @change="handleTabChange" :destroy-on-hide="false">
@@ -201,7 +221,7 @@
 <script setup>
 import { reactive, onMounted, onBeforeUnmount, ref } from 'vue';
 import { t } from '../../utils/locale'
-import { getLocalSSHConfig, operateLocalSSHService, getSSHConfigContent, updateSSHConfig, getAuthorizedKeysContent } from '../../api/host'
+import { getLocalSSHConfig, operateLocalSSHService, getSSHConfigContent, updateSSHConfig, getAuthorizedKeysContent, getSSHIntrusionInfo } from '../../api/host'
 import { saveFileContent } from '../../api/file'
 import { Message } from '@arco-design/web-vue';
 import SshLoginLog from '../../components/security/SshLoginLog.vue';
@@ -297,6 +317,9 @@ const handlePortSave = () => {
   handleConfigChange('port', port, originalPort);
 };
 
+// SSH入侵统计信息
+const intrusionInfo = ref(null);
+
 // SSH信息数据
 const sshInfo = reactive({
   install: false,
@@ -312,6 +335,16 @@ const sshInfo = reactive({
   pubkeyAuthEnabled: false,
   dnsEnabled: false
 })
+
+// 获取SSH登录入侵统计信息
+const fetchIntrusionInfo = async () => {
+  try {
+    const res = await getSSHIntrusionInfo();
+    intrusionInfo.value = res;
+  } catch (error) {
+    console.error('获取SSH入侵统计信息失败:', error);
+  }
+};
 
 // 获取SSH配置信息
 const fetchSSHInfo = async (showMessage = false) => {
@@ -694,6 +727,7 @@ const initMonacoEditor = async () => {
   // 组件挂载时获取数据并初始化编辑器
   onMounted(async () => {
     await fetchSSHInfo();
+    await fetchIntrusionInfo();
     // 添加一个微任务延迟，确保DOM已完全渲染
     await new Promise(resolve => setTimeout(resolve, 0));
     // 组件挂载后立即初始化编辑器，不再等待标签页切换
@@ -782,6 +816,39 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.ssh-intrusion-stats {
+  display: flex;
+  gap: 24px;
+  padding: 12px 20px;
+  background: var(--color-bg-2);
+  border-bottom: 1px solid var(--color-border-2);
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--color-text-3);
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-failed .stat-value {
+  color: rgb(var(--red-6));
+}
+
+.stat-success .stat-value {
+  color: rgb(var(--green-6));
 }
 
 /* 配置文件编辑器样式 */
