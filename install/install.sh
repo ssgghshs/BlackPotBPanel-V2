@@ -411,7 +411,8 @@ step_systemd() {
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=BlackPotBPanel Backend Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -421,7 +422,10 @@ WorkingDirectory=$BACKEND_DIR
 Environment=PATH=$VENV_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=$VENV_DIR/bin/python main.py
 Restart=always
-RestartSec=3
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
