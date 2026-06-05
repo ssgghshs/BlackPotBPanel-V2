@@ -9,23 +9,12 @@ const routes = [
     children: [
       {path: '', name: 'Home', component: () => import('../views/Home.vue'), meta: { title: '仪表盘' }},
       {path: 'home', name: 'HomeAlias', component: () => import('../views/Home.vue'), meta: { title: '仪表盘' }},
-      {path: 'file', name: 'File', component: () => import('../views/file/File.vue'), meta: { title: '文件管理', noAuditor: true }},
-      {path: 'host', name: 'Host', component: () => import('../views/host/Base.vue'),redirect: '/host/terminal', meta: { title: 'Ansible', noAuditor: true },
+      {path: 'app', name: 'App', component: () => import('../views/app/Base.vue'),redirect: '/app/hostapp', meta: { title: '应用管理' },
         children: [
-          {path: 'terminal', name: 'Terminal', component: () => import('../views/host/Terminal.vue'), meta: { title: '终端' }} ,
-          {path: 'hosts', name: 'Hosts', component: () => import('../views/host/Hosts.vue'), meta: { title: '主机管理' }} ,
-          {path: 'scripts', name: 'Scripts', component: () => import('../views/host/Scripts.vue'), meta: { title: '脚本库' }} ,
-          {path: 'crontab', name: 'Crontab', component: () => import('../views/host/Crontab.vue'), meta: { title: '定时任务' }} ,
-          {path: 'filetransfer', name: 'FileTransfer', component: () => import('../views/host/FileTransfer.vue'), meta: { title: '文件传输' }} ,
+          {path: 'hostapp', name: 'HostApp', component: () => import('../views/app/Hostapp.vue'), meta: { title: '主机应用' }} ,
+          {path: 'containerapp', name: 'ContainerApp', component: () => import('../views/app/Containerapp.vue'), meta: { title: '容器应用' }} ,
         ]
-      },
-      {path: 'logs', name: 'Logs', component: () => import('../views/logs/Base.vue'),redirect: '/logs/systemlog', meta: { title: '日志审计' },
-        children: [
-          {path: 'systemlog', name: 'SystemLog', component: () => import('../views/logs/SystemLogs.vue'), meta: { title: '系统日志' }} ,
-          {path: 'access', name: 'Access', component: () => import('../views/logs/AccessLog.vue'), meta: { title: '访问日志' }} ,
-          {path: 'loginLogs', name: 'LoginLogs', component: () => import('../views/logs/LoginLog.vue'), meta: { title: '登录日志' }} ,
-        ]
-      },
+      },      
       {path: 'container', name: 'Container', component: () => import('../views/container/Base.vue'),redirect: '/container/overview', meta: { title: '容器管理', noAuditor: true },
         children: [
           {path: 'overview', name: 'Overview', component: () => import('../views/container/Overview.vue'), meta: { title: '基本概况' }} ,
@@ -37,13 +26,40 @@ const routes = [
           {path: 'containerHost', name: 'ContainerHost', component: () => import('../views/container/ContainerHost.vue'), meta: { title: '容器宿主机' }} ,
         ]
       },
-       {path: 'security', name: 'Security', component: () => import('../views/security/Base.vue'), redirect: '/security/firewall', meta: { title: '安全管理', noAuditor: true },
-         children: [
-           {path: 'firewall', name: 'Firewall', component: () => import('../views/security/Firewall.vue'), meta: { title: '防火墙' }},
-           {path: 'ssh-manager', name: 'SSH', component: () => import('../views/security/SSH.vue'), meta: { title: 'SSH管理' }} ,
-           {path: 'process', name: 'Process', component: () => import('../views/security/Process.vue'), meta: { title: '进程管理' }} ,
-           {path: 'network-list', name: 'NetworkList', component: () => import('../views/security/NetworkList.vue'), meta: { title: '网络管理' }} ,
-         ]
+      {path: 'host', name: 'Host', component: () => import('../views/host/Base.vue'),redirect: '/host/terminal', meta: { title: 'Ansible', noAuditor: true },
+        children: [
+          {path: 'terminal', name: 'Terminal', component: () => import('../views/host/Terminal.vue'), meta: { title: '终端' }} ,
+          {path: 'hosts', name: 'Hosts', component: () => import('../views/host/Hosts.vue'), meta: { title: '主机管理' }} ,
+          {path: 'scripts', name: 'Scripts', component: () => import('../views/host/Scripts.vue'), meta: { title: '脚本库' }} ,
+          {path: 'crontab', name: 'Crontab', component: () => import('../views/host/Crontab.vue'), meta: { title: '定时任务' }} ,
+          {path: 'filetransfer', name: 'FileTransfer', component: () => import('../views/host/FileTransfer.vue'), meta: { title: '文件传输' }} ,
+        ]
+      },
+      {path: 'file', name: 'File', component: () => import('../views/file/File.vue'), meta: { title: '文件管理', noAuditor: true }},   
+      {path: 'ai', name: 'Ai', component: () => import('../views/ai/Base.vue'),redirect: '/ai/chat', meta: { title: 'AI' },
+        children: [
+          {path: 'chat', name: 'Chat', component: () => import('../views/ai/AIChat.vue'), meta: { title: 'AI Chat' }} ,
+          {path: 'model', name: 'Model', component: () => import('../views/ai/Model.vue'), meta: { title: '模型管理' }} ,
+          {path: 'usage', name: 'Usage', component: () => import('../views/ai/Usage.vue'), meta: { title: '用量统计' }} ,
+        ]
+      },  
+      {path: 'database', name: 'Database', component: () => import('../views/database/Base.vue'),redirect: '/database/mysql',  meta: { title: '数据库管理' },
+        children: [
+          {path: 'sqlite', name: 'Sqlite', component: () => import('../views/database/Sqlite.vue'), meta: { title: 'SQLite' }} ,
+          {path: 'sqlite/:id/manage', name: 'SqliteManager', component: () => import('../views/database/SqliteManager.vue'), meta: { title: '表管理' }} ,
+          {path: 'mysql', name: 'Mysql', component: () => import('../views/database/Mysql.vue'), meta: { title: 'MySQL' }} ,
+          {path: 'mysql/:id/manage', name: 'MysqlManager', component: () => import('../views/database/MysqlManager.vue'), meta: { title: 'MySQL 管理' }} ,
+          {path: 'postgresql', name: 'Postgresql', component: () => import('../views/database/Postgresql.vue'), meta: { title: 'PostgreSQL' }} ,
+          {path: 'postgresql/:id/manage', name: 'PostgresqlManager', component: () => import('../views/database/PostgresqlManager.vue'), meta: { title: 'PostgreSQL 管理' }} ,
+        ]
+      }, 
+      {path: 'security', name: 'Security', component: () => import('../views/security/Base.vue'), redirect: '/security/firewall', meta: { title: '安全管理', noAuditor: true },
+        children: [
+          {path: 'firewall', name: 'Firewall', component: () => import('../views/security/Firewall.vue'), meta: { title: '防火墙' }},
+          {path: 'ssh-manager', name: 'SSH', component: () => import('../views/security/SSH.vue'), meta: { title: 'SSH管理' }} ,
+          {path: 'process', name: 'Process', component: () => import('../views/security/Process.vue'), meta: { title: '进程管理' }} ,
+          {path: 'network-list', name: 'NetworkList', component: () => import('../views/security/NetworkList.vue'), meta: { title: '网络管理' }} ,
+        ]
        },
       {path: 'waf', name: 'Waf', component: () => import('../views/waf/Base.vue'),redirect: '/waf/basic', meta: { title: 'WAF', noAuditor: true },
         children: [
@@ -55,27 +71,18 @@ const routes = [
           {path: 'log', name: 'Log', component: () => import('../views/waf/Log.vue'), meta: { title: '日志' }} ,
           {path: 'global', name: 'GlobalSetting', component: () => import('../views/waf/GlobalSetting.vue'), meta: { title: '全局设置' }} ,
         ]
+      },            
+      {path: 'logs', name: 'Logs', component: () => import('../views/logs/Base.vue'),redirect: '/logs/systemlog', meta: { title: '日志审计' },
+        children: [
+          {path: 'systemlog', name: 'SystemLog', component: () => import('../views/logs/SystemLogs.vue'), meta: { title: '系统日志' }} ,
+          {path: 'access', name: 'Access', component: () => import('../views/logs/AccessLog.vue'), meta: { title: '访问日志' }} ,
+          {path: 'loginLogs', name: 'LoginLogs', component: () => import('../views/logs/LoginLog.vue'), meta: { title: '登录日志' }} ,
+        ]
       },
       {path: 'settings', name: 'Settings', component: () => import('../views/settings/Base.vue'),redirect: '/settings/system', meta: { title: '系统设置' },
         children: [
           {path: 'system', name: 'System', component: () => import('../views/settings/System.vue'), meta: { title: '系统' }} ,
           {path: 'user', name: 'User', component: () => import('../views/settings/User.vue'), meta: { title: '用户' }},
-        ]
-      },
-      {path: 'database', name: 'Database', component: () => import('../views/database/Base.vue'),redirect: '/database/mysql',  meta: { title: '数据库管理' },
-        children: [
-          {path: 'sqlite', name: 'Sqlite', component: () => import('../views/database/Sqlite.vue'), meta: { title: 'SQLite' }} ,
-          {path: 'sqlite/:id/manage', name: 'SqliteManager', component: () => import('../views/database/SqliteManager.vue'), meta: { title: '表管理' }} ,
-          {path: 'mysql', name: 'Mysql', component: () => import('../views/database/Mysql.vue'), meta: { title: 'MySQL' }} ,
-          {path: 'mysql/:id/manage', name: 'MysqlManager', component: () => import('../views/database/MysqlManager.vue'), meta: { title: 'MySQL 管理' }} ,
-          {path: 'postgresql', name: 'Postgresql', component: () => import('../views/database/Postgresql.vue'), meta: { title: 'PostgreSQL' }} ,
-          {path: 'postgresql/:id/manage', name: 'PostgresqlManager', component: () => import('../views/database/PostgresqlManager.vue'), meta: { title: 'PostgreSQL 管理' }} ,
-        ]
-      },
-      {path: 'ai', name: 'Ai', component: () => import('../views/ai/Base.vue'),redirect: '/ai/chat', meta: { title: 'AI' },
-        children: [
-          {path: 'chat', name: 'Chat', component: () => import('../views/ai/AIChat.vue'), meta: { title: 'AI Chat' }} ,
-          {path: 'model', name: 'Model', component: () => import('../views/ai/Model.vue'), meta: { title: '模型管理' }} ,
         ]
       },
     ]

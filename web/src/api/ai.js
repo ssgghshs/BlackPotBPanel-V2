@@ -140,3 +140,69 @@ export function streamChatWithAi(data, signal) {
     signal
   })
 }
+
+
+// ==================== AI 工具确认 ====================
+
+// 确认/拒绝高风险工具执行
+export function confirmAiTool(data) {
+  return request({
+    url: '/ai/chat/confirm',
+    method: 'post',
+    data
+  })
+}
+
+// ==================== AI 工具集 ====================
+
+// 获取可用工具集列表
+export function getAiToolsets() {
+  return request({
+    url: '/ai/tools/toolsets',
+    method: 'get'
+  })
+}
+
+
+// ==================== AI 文件上传 ====================
+
+// 上传文件供 AI 对话使用
+export function uploadAiFile(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/ai/upload',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+
+// ==================== AI 用量统计 ====================
+
+// 获取用量统计
+export function getAiUsage(params) {
+  return request({
+    url: '/ai/usage',
+    method: 'get',
+    params
+  })
+}
+
+// 导出用量数据
+export function exportAiUsage(params) {
+  return request({
+    url: '/ai/usage/export',
+    method: 'get',
+    params
+  })
+}
+
+// 重置用量
+export function resetAiUsage() {
+  return request({
+    url: '/ai/usage/reset',
+    method: 'post'
+  })
+}

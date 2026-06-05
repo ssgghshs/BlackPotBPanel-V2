@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import json
 import logging
+import os
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from middleware.auth import get_current_active_user
@@ -12,6 +13,14 @@ from app.ai import service, schemas
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+def _format_size(size_bytes: int) -> str:
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f'{size_bytes:.1f}{unit}' if unit != 'B' else f'{size_bytes}B'
+        size_bytes /= 1024
+    return f'{size_bytes:.1f}TB'
 
 
 # ==================== AI 模型配置管理 ====================
@@ -237,7 +246,7 @@ async def stream_chat_with_ai(
 
         async with AiAsyncSessionLocal() as db:
             try:
-                async for event in service.stream_chat_with_model(db, req):
+                async for event in service.stream_chat_with_model(db, req, user_id=current_user.id):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 await db.commit()
             except ValueError as e:
@@ -259,3 +268,92 @@ async def stream_chat_with_ai(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.post("/chat/confirm")
+async def confirm_tool_execution(
+    req: schemas.AiToolConfirmRequest,
+    current_user=Depends(get_current_active_user),
+):
+    """确认/拒绝高风险工具的执行"""
+    success = service._confirm_agent_tool(
+        conversation_id=req.conversation_id,
+        call_id=req.call_id,
+        confirmed=req.confirmed,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到对应的 Agent 或确认不匹配",
+        )
+    return {"message": "确认成功", "confirmed": req.confirmed}
+
+
+@router.get("/tools/toolsets", response_model=schemas.AiToolsetsResponse)
+async def get_ai_toolsets(
+    current_user=Depends(get_current_active_user),
+):
+    """获取可用工具集列表"""
+    items = service.get_toolsets()
+    return {"toolsets": items}
+
+
+# ==================== AI 文件上传 ====================
+
+@router.post("/upload", response_model=schemas.AiUploadResponse)
+async def upload_ai_file(
+    file: UploadFile,
+    current_user=Depends(get_current_active_user),
+):
+    """上传文件供 AI 对话使用（上传后返回服务端路径，可在 chat/stream 的 files 字段引用）"""
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="文件名为空")
+
+    content = await file.read()
+    max_size = 50 * 1024 * 1024  # 50MB
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"文件过大（{_format_size(len(content))}），最大支持 50MB",
+        )
+
+    result = await service.save_uploaded_file(content, file.filename)
+    logger.info(f'[AI] 上传文件: {file.filename} → {result.path} ({_format_size(result.size)})')
+    return result
+
+
+# ==================== AI 用量统计 ====================
+
+@router.get("/usage", response_model=schemas.AiUsageResponse)
+async def get_ai_usage(
+    time_range: str = Query('week', description='时间范围: today/week/month/all'),
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_ai_db),
+):
+    """获取 AI 用量统计（汇总 + 按模型 + 按日趋势 + 最近明细）"""
+    data = await service.get_usage_stats(db, user_id=current_user.id, time_range=time_range)
+    return data
+
+
+@router.get("/usage/export")
+async def export_ai_usage(
+    time_range: str = Query('week', description='时间范围: today/week/month/all'),
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_ai_db),
+):
+    """导出 AI 用量数据"""
+    data = await service.get_usage_export(db, user_id=current_user.id, time_range=time_range)
+    return {"data": data}
+
+
+@router.post("/usage/reset", response_model=schemas.AiUsageResetResponse)
+async def reset_ai_usage(
+    current_user=Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_ai_db),
+):
+    """清空当前用户的 AI 用量记录"""
+    deleted_count = await service.reset_usage(db, user_id=current_user.id)
+    return {
+        "deleted_count": deleted_count,
+        "message": f"已清空 {deleted_count} 条用量记录",
+    }

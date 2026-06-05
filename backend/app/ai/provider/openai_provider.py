@@ -6,7 +6,7 @@ import httpx
 import openai
 from openai import OpenAI, AsyncOpenAI
 
-from app.ai.provider.base import BaseAIProvider, BaseLLMModel, ModelConfig, ChatMessage, ChatResponse
+from app.ai.provider.base import BaseAIProvider, BaseLLMModel, ModelConfig, ChatMessage, ChatResponse, ToolDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,8 @@ class OpenAIModel(BaseLLMModel):
     def _build_messages(self, messages: List[ChatMessage]) -> List[Dict]:
         """构建 OpenAI 消息格式"""
         result = []
+        # 判断是否为 DeepSeek 模型（deepseek 的 thinking 模式需要 reasoning_content）
+        is_deepseek = 'deepseek' in self.model_config.model_name.lower()
         for msg in messages:
             item = {'role': msg.role, 'content': msg.content}
             if msg.tool_calls:
@@ -41,6 +43,12 @@ class OpenAIModel(BaseLLMModel):
                 item['tool_call_id'] = msg.tool_call_id
             if msg.name:
                 item['name'] = msg.name
+            # DeepSeek 的 thinking 模式严格要求传回 reasoning_content
+            # 对于所有 assistant 消息，即使从 DB 加载的老消息没有该字段，也要确保存在
+            if is_deepseek and msg.role == 'assistant':
+                item['reasoning_content'] = msg.reasoning_content or ''
+            elif msg.reasoning_content:
+                item['reasoning_content'] = msg.reasoning_content
             result.append(item)
         return result
 
@@ -52,6 +60,28 @@ class OpenAIModel(BaseLLMModel):
             'temperature': kwargs.get('temperature', self.model_config.temperature),
             'top_p': kwargs.get('top_p', self.model_config.top_p),
         }
+        # 处理 tools（function calling）
+        # 支持两种格式：
+        #   1. ToolDefinition 对象列表
+        #   2. 已经是 OpenAI 格式的 dict 列表（如 [{"type":"function","function":{...}}]）
+        raw_tools = kwargs.get('tools')
+        if raw_tools:
+            if isinstance(raw_tools[0], ToolDefinition):
+                params['tools'] = [
+                    {
+                        'type': 'function',
+                        'function': {
+                            'name': t.name,
+                            'description': t.description,
+                            'parameters': t.parameters,
+                        }
+                    }
+                    for t in raw_tools
+                ]
+            else:
+                # 已经是 dict 格式，直接透传
+                params['tools'] = raw_tools
+            logger.debug(f'_get_kwargs: tools={len(params["tools"])}个')
         # 去掉 None 值
         return {k: v for k, v in params.items() if v is not None}
 

@@ -4,6 +4,14 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class ToolDefinition:
+    """工具定义 - 用于 OpenAI function calling"""
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+
+
+@dataclass
 class ModelConfig:
     """模型配置"""
     model_name: str
@@ -26,6 +34,7 @@ class ChatMessage:
     tool_calls: Optional[List[Dict]] = None
     tool_call_id: Optional[str] = None
     name: Optional[str] = None
+    reasoning_content: Optional[str] = None
 
 
 @dataclass

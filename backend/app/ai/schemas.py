@@ -132,6 +132,8 @@ class AiConversationUpdate(BaseModel):
 
 
 class AiConversationSwitchModel(BaseModel):
+    model_config = {'protected_namespaces': ()}
+
     model_id: int
     model_name: str
 
@@ -167,6 +169,7 @@ class AiMessageCreate(AiMessageBase):
 class AiMessage(AiMessageBase):
     id: int
     conversation_id: int
+    reasoning_content: Optional[str] = None
     token_usage: int
     created_at: Optional[datetime] = None
 
@@ -187,7 +190,111 @@ class AiStreamChatRequest(BaseModel):
     model_id: int
     conversation_id: Optional[int] = None
     message: str
+    files: Optional[List[str]] = None  # 附加文件路径列表（上传后的服务端路径）
     system_prompt: Optional[str] = None
     temperature: Optional[float] = 0.7
-    smart_mode: bool = False
     max_tokens: Optional[int] = None
+    smart_mode: Optional[bool] = True
+    enabled_tools: Optional[List[str]] = None
+
+
+class AiUploadResponse(BaseModel):
+    """文件上传响应"""
+    path: str
+    name: str
+    size: int
+
+
+class AiToolConfirmRequest(BaseModel):
+    """危险操作确认请求"""
+    model_config = {'protected_namespaces': ()}
+
+    conversation_id: int
+    call_id: str
+    confirmed: bool
+
+
+# ==================== AI 工具集 ====================
+
+class AiToolsetInfo(BaseModel):
+    """工具集信息"""
+    id: str
+    name: str
+    tools: List[str]
+
+
+class AiToolsetsResponse(BaseModel):
+    """工具集列表响应"""
+    toolsets: List[AiToolsetInfo]
+
+
+# ==================== AI 用量统计 ====================
+
+class AiUsageLogItem(BaseModel):
+    """用量日志单条记录"""
+    model_config = {'protected_namespaces': (), 'from_attributes': True}
+
+    id: int
+    conversation_id: Optional[int] = None
+    conversation_title: str = ''
+    model_name: str
+    provider: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    cost: int = 0
+    created_at: Optional[str] = None
+
+
+class AiUsageSummary(BaseModel):
+    """用量汇总"""
+    total_requests: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class AiUsageByModel(BaseModel):
+    """按模型分组统计"""
+    model_config = {'protected_namespaces': ()}
+
+    model_name: str
+    provider: str
+    request_count: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+class AiUsageDailyStat(BaseModel):
+    """按日趋势"""
+    date: str
+    request_count: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+class AiUsageResponse(BaseModel):
+    """用量统计响应"""
+    summary: AiUsageSummary
+    by_model: List[AiUsageByModel]
+    daily_stats: List[AiUsageDailyStat]
+    recent_logs: List[AiUsageLogItem]
+
+
+class AiUsageExportItem(BaseModel):
+    """用量导出单条记录"""
+    date: str
+    model: str
+    provider: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cost: int = 0
+
+
+class AiUsageResetResponse(BaseModel):
+    """用量重置响应"""
+    deleted_count: int
+    message: str

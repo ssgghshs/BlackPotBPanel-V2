@@ -2,8 +2,9 @@
   <div class="ai-container">
     <nav class="horizontal-menu">
       <ul>
-        <li><router-link to="/ai/chat">AI Chat</router-link></li>
+        <li><router-link to="/ai/chat">{{ t('aiChat') }}</router-link></li>
         <li><router-link to="/ai/model">{{ t('modelManagement') }}</router-link></li>
+        <li><router-link to="/ai/usage">{{ t('usageStatistics') }}</router-link></li>
       </ul>
     </nav>
     <router-view />

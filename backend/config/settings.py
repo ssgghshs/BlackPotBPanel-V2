@@ -91,12 +91,13 @@ class Settings(BaseSettings):
     
     # 基础路径
     BASE_PANEL_PATH: str = _BASE_PANEL
-
+    
     # 回收站路径
     RECYCLE_PATH: str = f"{_BASE_PANEL}/.recycle_bp"
     # 网站ssl证书
     WEBSITE_SSL_PATH: str = f"{_BASE_PANEL}/waf/ssl/"
     WAF_ACCESS_LOG_PATH: str = f"{_BASE_PANEL}/waf/logs/access.log"
+    WAF_ERROR_LOG_PATH: str = f"{_BASE_PANEL}/waf/logs/error.log"
     # waf站点配置
     WAF_SITE_WWW_PATH: str = f"{_BASE_PANEL}/waf/sites/www/"
     WAF_SITE_CONF_PATH: str = f"{_BASE_PANEL}/waf/sites/conf/"

@@ -1,10 +1,5 @@
 <template>
   <div class="layout-container">
-    <!-- 移动端菜单切换按钮 -->
-    <div v-if="isMobile" class="mobile-menu-toggle" @click="toggleMobileMenu">
-      <icon-menu />
-    </div>
-    
     <!-- 侧边栏导航 -->
     <div 
       class="layout-sider" 
@@ -50,7 +45,6 @@
             </div>
           </div>
         </div>
-        <icon-close class="close-icon" @click="closeNotification" />
       </div>
     </div>
     

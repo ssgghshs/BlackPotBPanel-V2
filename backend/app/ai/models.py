@@ -81,8 +81,30 @@ class AiMessage(AiBase):
     conversation_id = Column(Integer, nullable=False, index=True, comment="关联的对话ID")
     role = Column(String(16), nullable=False, comment="角色: user / assistant / system")
     content = Column(Text, nullable=False, comment="消息内容")
+    reasoning_content = Column(Text, nullable=True, comment="思考内容（DeepSeek thinking 模式）")
     token_usage = Column(Integer, default=0, comment="本条 Token 消耗")
     created_at = Column(DateTime, default=get_localized_datetime)
 
     def __repr__(self):
         return f"<AiMessage(id={self.id}, role='{self.role}', conversation_id={self.conversation_id})>"
+
+
+class AiUsageLog(AiBase):
+    """AI 用量日志 - 记录每次 AI 请求的 Token 消耗"""
+    __tablename__ = "ai_usage_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True, comment="用户ID")
+    model_id = Column(Integer, nullable=True, comment="模型配置ID")
+    conversation_id = Column(Integer, nullable=True, index=True, comment="关联的对话ID")
+    conversation_title = Column(String(256), default='', comment="对话标题")
+    model_name = Column(String(200), nullable=False, comment="模型标识")
+    provider = Column(String(50), nullable=False, comment="厂商")
+    prompt_tokens = Column(Integer, default=0, comment="输入 Token 数")
+    completion_tokens = Column(Integer, default=0, comment="输出 Token 数")
+    total_tokens = Column(Integer, default=0, comment="总 Token 数")
+    cost = Column(Integer, default=0, comment="费用（单位：分，暂未启用）")
+    created_at = Column(DateTime, default=get_localized_datetime, index=True, comment="记录时间")
+
+    def __repr__(self):
+        return f"<AiUsageLog(id={self.id}, user_id={self.user_id}, total_tokens={self.total_tokens})>"
