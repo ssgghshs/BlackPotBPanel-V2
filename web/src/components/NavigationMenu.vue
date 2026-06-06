@@ -14,13 +14,6 @@
         </a-menu-item>
       </a-tooltip>
 
-      <a-tooltip v-if="!isAuditor()" :content="t('app')" :disabled="!isMenuCollapsed" mini position="right">
-        <a-menu-item key="app">
-          <template #icon><icon-apps /></template>
-          <span v-show="!isMenuCollapsed">{{ t('app') }}</span>
-        </a-menu-item>
-      </a-tooltip>
-
       <a-tooltip v-if="!isAuditor()" :content="t('container')" :disabled="!isMenuCollapsed" mini position="right">
         <a-menu-item key="container">
           <template #icon><DockerIcon/></template>
@@ -138,7 +131,6 @@ import {
   IconMobile,
   IconSafe,
   IconRobot,
-  IconApps
 } from '@arco-design/web-vue/es/icon';
 import { Tooltip } from '@arco-design/web-vue';
 // 引入全局语言状态管理
@@ -166,7 +158,6 @@ export default {
     IconSafe,
     DatabaseIcon,
     IconRobot,
-    IconApps,
     ATooltip: Tooltip
   },
   setup(props, { emit }) {
@@ -183,8 +174,6 @@ export default {
         return ['dashboard'];
       } else if (path.startsWith('/host')) {
         return ['host'];
-      } else if (path.startsWith('/app')) {
-        return ['app'];
       } else if (path.startsWith('/container')) {
         return ['container'];
       } else if (path.startsWith('/logs')) {
@@ -210,9 +199,6 @@ export default {
       switch (key) {
         case 'dashboard':
           router.push('/home');
-          break;
-        case 'app':
-          router.push('/app');
           break;
         case 'host':
           router.push('/host');

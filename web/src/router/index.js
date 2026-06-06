@@ -8,13 +8,7 @@ const routes = [
   {path: '/', name: 'Layout', component: () => import('../views/Layout.vue'),
     children: [
       {path: '', name: 'Home', component: () => import('../views/Home.vue'), meta: { title: '仪表盘' }},
-      {path: 'home', name: 'HomeAlias', component: () => import('../views/Home.vue'), meta: { title: '仪表盘' }},
-      {path: 'app', name: 'App', component: () => import('../views/app/Base.vue'),redirect: '/app/hostapp', meta: { title: '应用管理' },
-        children: [
-          {path: 'hostapp', name: 'HostApp', component: () => import('../views/app/Hostapp.vue'), meta: { title: '主机应用' }} ,
-          {path: 'containerapp', name: 'ContainerApp', component: () => import('../views/app/Containerapp.vue'), meta: { title: '容器应用' }} ,
-        ]
-      },      
+      {path: 'home', name: 'HomeAlias', component: () => import('../views/Home.vue'), meta: { title: '仪表盘' }},     
       {path: 'container', name: 'Container', component: () => import('../views/container/Base.vue'),redirect: '/container/overview', meta: { title: '容器管理', noAuditor: true },
         children: [
           {path: 'overview', name: 'Overview', component: () => import('../views/container/Overview.vue'), meta: { title: '基本概况' }} ,

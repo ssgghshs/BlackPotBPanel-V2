@@ -232,24 +232,17 @@ export default {
                   clearInterval(pollInterval)
                   if (initialized) {
                     updateChart()
+                  } else {
+                    console.warn('轮询超时，强制初始化图表')
+                    if (chartContainer.value) {
+                      chartContainer.value.style.width = '100%'
+                      chartContainer.value.style.height = '100%'
+                      initChart()
+                      updateChart()
+                    }
                   }
                 }
               }, 300)
-              
-              // 设置最大轮询时间
-              setTimeout(() => {
-                clearInterval(pollInterval)
-                if (!chartInstance) {
-                  console.warn('轮询超时，强制初始化图表')
-                  // 强制设置容器尺寸并初始化
-                  if (chartContainer.value) {
-                    chartContainer.value.style.width = '100%'
-                    chartContainer.value.style.height = '100%'
-                    initChart()
-                    updateChart()
-                  }
-                }
-              }, 3000)
             }
           } else {
             updateChart()

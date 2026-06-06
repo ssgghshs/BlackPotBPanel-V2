@@ -165,11 +165,6 @@ systemctl start Blackpotbpanel
 - WAF管理，有待重构，以及地区限制功能
 - 防火墙/SSH管理需要新增接入Fail2ban
 
-## 待新增功能
-- 文件对传功能需要新增
-- 操作日志功能需要新增
-
-
 
 
 ## 国际化
