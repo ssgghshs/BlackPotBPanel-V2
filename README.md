@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://python.org/"><img src="https://img.shields.io/badge/python-%3E=3.10.x-green.svg" /></a>
   <a href="https://nodejs.org/zh-cn/"><img src="https://img.shields.io/badge/node-%3E%3D%2018.0.0-brightgreen" /></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/fastapi-0.105.0-blue" /></a>
 </p>
 
 
