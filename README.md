@@ -2,7 +2,10 @@
   <img src="./images/favicon.png" width="120" alt="BlackPotBPanel V2" />
 </p>
 
-[![img](https://img.shields.io/badge/python-%3E=3.10.x-green.svg)](https://python.org/) [![img](https://img.shields.io/badge/node-%3E%3D%2018.0.0-brightgreen)](https://nodejs.org/zh-cn/)
+<p align="center">
+  <a href="https://python.org/"><img src="https://img.shields.io/badge/python-%3E=3.10.x-green.svg" /></a>
+  <a href="https://nodejs.org/zh-cn/"><img src="https://img.shields.io/badge/node-%3E%3D%2018.0.0-brightgreen" /></a>
+</p>
 
 
 
