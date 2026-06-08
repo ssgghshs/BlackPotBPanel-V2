@@ -9,8 +9,8 @@
 
 
 
-# BlackPotBPanel V2
-BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面板，写的比较垃圾，只实现了一些基本功能，后续可能会继续完善。
+<h1 align="center">BlackPotBPanel V2</h1>
+<p align="center">BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面板。</p>
 
 ## 演示环境
 (https://demo.panel.blackpotbp.cc)
