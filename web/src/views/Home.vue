@@ -9,7 +9,7 @@
         <div class="right-section">
           <!-- 重启按钮 -->
         <a-dropdown @select="handlePoweroffSelect" trigger="click">
-          <icon-poweroff size="20" style="cursor: pointer" />
+          <icon-poweroff size="20" class="restart-icon" />
           <template #content>
             <a-doption value="restart-panel">{{ t('restartPanel') }}</a-doption>
             <a-doption value="reboot-server">{{ t('rebootServer') }}</a-doption>
@@ -692,6 +692,38 @@ body[arco-theme="dark"] .username {
   font-size: 24px !important;
   width: 24px !important;
   height: 24px !important;
+  color: #666;
+}
+
+body[arco-theme="dark"] .language-icon {
+  color: #cccccc !important;
+}
+
+.language-icon:hover {
+  color: rgb(var(--primary-6));
+}
+
+body[arco-theme="dark"] .language-icon:hover {
+  color: #3c7eff !important;
+}
+
+/* 重启图标 */
+.restart-icon {
+  color: #666;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+body[arco-theme="dark"] .restart-icon {
+  color: #cccccc !important;
+}
+
+.restart-icon:hover {
+  color: rgb(var(--primary-6));
+}
+
+body[arco-theme="dark"] .restart-icon:hover {
+  color: #3c7eff !important;
 }
 
 /* 暗色主题下卡片容器 */

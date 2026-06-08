@@ -8,9 +8,7 @@
     >
       <div class="sider-header">
         <!-- 预留区域 -->
-        <div class="logo-container" :class="{ 'collapsed': isMenuCollapsed }">
-          <img src="/favicon.ico" alt="Logo" class="logo-image" />
-        </div>
+        <img src="/favicon.png" alt="Logo" class="logo-image" :class="{ 'collapsed': isMenuCollapsed }" />
       </div>
       <NavigationMenu @collapse="onMenuCollapse" @close="toggleMobileMenu" />
     </div>
@@ -311,36 +309,17 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* Logo容器样式 */
-.logo-container {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background-color: #f0f0f0;
-  transition: all 0.2s ease; /* 添加过渡效果 */
-}
-
-/* 暗色主题下Logo容器 */
-:global(body[arco-theme="dark"]) .logo-container {
-  background-color: #2e2e30;
-}
-
 /* Logo图片样式 */
 .logo-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: all 0.2s ease; /* 添加过渡效果 */
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  transition: all 0.2s ease;
 }
 
-/* 收起状态下的Logo容器样式 */
-.logo-container.collapsed {
-  width: 30px;
-  height: 30px;
+.logo-image.collapsed {
+  width: 40px;
+  height: 40px;
 }
 
 .layout-content {

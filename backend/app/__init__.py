@@ -249,7 +249,7 @@ def create_app():
                 return await call_next(request)
 
             # 白名单：静态资源和 OpenAPI
-            if path.startswith("/assets/") or path == "/login.png" or path == "/favicon.ico":
+            if path.startswith("/assets/") or path == "/login.png" or path == "/favicon.png":
                 return await call_next(request)
             if path == api_prefix or path.startswith(api_prefix + "/docs") or path.startswith(api_prefix + "/redoc") or path.startswith(api_prefix + "/openapi.json"):
                 return await call_next(request)
@@ -313,13 +313,13 @@ def create_app():
     if os.path.exists(login_png_path):
         @app.get("/login.png", include_in_schema=False)
         async def serve_login_png():
-            return FileResponse(login_png_path, media_type="image/png")
+            return FileResponse(login_png_path, media_type="image/png")            
 
-    favicon_ico_path = os.path.join(web_dir, "favicon.ico")
-    if os.path.exists(favicon_ico_path):
-        @app.get("/favicon.ico", include_in_schema=False)
-        async def serve_favicon_ico():
-            return FileResponse(favicon_ico_path, media_type="image/x-icon")
+    favicon_png_path = os.path.join(web_dir, "favicon.png")
+    if os.path.exists(favicon_png_path):
+        @app.get("/favicon.png", include_in_schema=False)
+        async def serve_favicon():
+            return FileResponse(favicon_png_path, media_type="image/png")
 
     # ─── 安全入口路由 ───────────────────────────────────────────
     if entrance:

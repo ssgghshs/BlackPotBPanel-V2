@@ -2,6 +2,9 @@
   <img src="./images/favicon.ico" width="120" alt="BlackPotBPanel V2" />
 </p>
 
+[![img](https://img.shields.io/badge/python-%3E=3.10.x-green.svg)](https://python.org/) [![img](https://img.shields.io/badge/node-%3E%3D%2018.0.0-brightgreen)](https://nodejs.org/zh-cn/)
+
+
 
 # BlackPotBPanel V2
 BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面板，写的比较垃圾，只实现了一些基本功能，后续可能会继续完善。
@@ -164,7 +167,7 @@ systemctl start Blackpotbpanel
 - 数据库管理，需要新增支持postgresql/redis/mongodb,以及mysql/sqlite的管理功能的完善
 - WAF管理，有待重构，以及地区限制功能
 - 防火墙/SSH管理需要新增接入Fail2ban
-
+- 远程主机文件管理功能，需要新增上传/下载/删除/移动/重命名/创建目录/创建文件等功能
 
 
 ## 国际化

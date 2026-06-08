@@ -129,16 +129,18 @@ export default {
       },
       resizeObserver: null,
       chartInitializationAttempts: 0,
-      maxInitializationAttempts: 5
+      maxInitializationAttempts: 5,
+      _isActive: false
     }
   },
   mounted() {
+    this._isActive = true
     this.initCharts()
     this.fetchSystemInfo()
     // 使用更安全的定时器设置方式
     this.$nextTick(() => {
       this.timer = setInterval(() => {
-        if (this._isDestroyed) return // 组件已销毁则不执行
+        if (!this._isActive) return
         this.fetchSystemInfo()
       }, 5000)
     })
@@ -146,24 +148,8 @@ export default {
     // 添加窗口大小调整监听器
     window.addEventListener('resize', this.handleResize)
   },
-  beforeDestroy() {
-    // 更安全的定时器清理
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
-    // 销毁所有图表实例
-    this.destroyCharts()
-    // 移除窗口大小调整监听器
-    window.removeEventListener('resize', this.handleResize)
-    // 断开ResizeObserver
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect()
-      this.resizeObserver = null
-    }
-  },
-  // Vue 3兼容性处理
   beforeUnmount() {
+    this._isActive = false
     // 更安全的定时器清理
     if (this.timer) {
       clearInterval(this.timer)
@@ -235,29 +221,8 @@ export default {
       // 轮询检查容器尺寸
       const pollInterval = setInterval(() => {
         if (this.chartInitializationAttempts >= this.maxInitializationAttempts) {
-          console.error('达到最大初始化尝试次数，停止轮询');
           clearInterval(pollInterval);
-          return;
-        }
-        
-        if (this.$refs.cpuChart && 
-            this.$refs.cpuChart.clientWidth > 0 && 
-            this.$refs.cpuChart.clientHeight > 0) {
-          console.log('轮询检测到容器尺寸可用，开始初始化图表');
-          this.initializeChartInstances();
-          clearInterval(pollInterval);
-        } else {
-          this.chartInitializationAttempts++;
-          console.warn(`轮询检查容器尺寸，第${this.chartInitializationAttempts}次尝试`);
-        }
-      }, 300);
-      
-      // 设置最大轮询时间
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (!this.charts.cpu) {
-          console.warn('轮询超时，强制设置默认尺寸初始化图表');
-          // 强制设置容器尺寸
+          // 轮询超时，强制设置默认尺寸初始化图表
           if (this.$refs.cpuChart) {
             this.$refs.cpuChart.style.width = '140px';
             this.$refs.cpuChart.style.height = '140px';
@@ -271,8 +236,18 @@ export default {
             this.$refs.loadChart.style.height = '140px';
           }
           this.initializeChartInstances();
+          return;
         }
-      }, 3000); // 3秒后超时
+        
+        if (this.$refs.cpuChart && 
+            this.$refs.cpuChart.clientWidth > 0 && 
+            this.$refs.cpuChart.clientHeight > 0) {
+          clearInterval(pollInterval);
+          this.initializeChartInstances();
+        } else {
+          this.chartInitializationAttempts++;
+        }
+      }, 300);
     },
     
     initializeChartInstances() {
@@ -354,13 +329,11 @@ export default {
         if (!this.charts.cpu || !this.charts.memory || !this.charts.load) {
           // 如果图表未初始化，尝试重新初始化
           if (this.$refs.cpuChart && this.$refs.memoryChart && this.$refs.loadChart) {
-            console.warn('图表实例未初始化完成，尝试重新初始化');
             this.initializeChartInstances();
             return;
-          } else {
-            console.warn('图表实例未初始化完成且容器引用不存在');
-            return;
           }
+          // 容器尚未就绪，跳过本次更新
+          return;
         }
 
         // 更新CPU图表 - 显示直接的percent值
@@ -537,7 +510,7 @@ export default {
     },
     async fetchSystemInfo() {
       // 防止组件销毁后仍然执行
-      if (this._isDestroyed || this._isBeingDestroyed) {
+      if (!this._isActive) {
         return
       }
       
@@ -545,7 +518,7 @@ export default {
         const response = await getSystemInfo()
         
         // 防止组件销毁后仍然更新状态
-        if (this._isDestroyed || this._isBeingDestroyed) {
+        if (!this._isActive) {
           return
         }
         
@@ -561,7 +534,7 @@ export default {
         
         if (data) {
           // 防止组件销毁后仍然更新状态
-          if (this._isDestroyed || this._isBeingDestroyed) {
+          if (!this._isActive) {
             return
           }
           
@@ -596,16 +569,17 @@ export default {
         }
       } catch (error) {
         // 防止组件销毁后仍然更新状态
-        if (this._isDestroyed || this._isBeingDestroyed) {
+        if (!this._isActive) {
           return
         }
         
         console.error('获取系统信息失败:', error)
       } finally {
         // 防止组件销毁后仍然更新状态
-        if (!this._isDestroyed && !this._isBeingDestroyed) {
-          this.loading = false
+        if (!this._isActive) {
+          return
         }
+        this.loading = false
       }
     },
     handleResize() {

@@ -475,7 +475,7 @@ onUnmounted(() => {
 /* ===== log body ===== */
 .logs-body {
   display: flex;
-  height: calc(100vh - 200px);
+  height: 700px;
   min-height: 400px;
 }
 
@@ -594,14 +594,14 @@ onUnmounted(() => {
   white-space: pre-wrap;
   word-wrap: break-word;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.4;
   margin: 0;
   padding: 15px;
   background-color: #000000;
   color: #ffffff;
   border-radius: 0;
-  max-height: calc(100vh - 240px);
+  max-height: 630px;
   overflow-y: auto;
 }
 
@@ -651,7 +651,7 @@ onUnmounted(() => {
   }
 
   .log-content {
-    font-size: 15px;
+    font-size: 12px;
     padding: 10px;
     max-height: 400px;
   }
@@ -673,7 +673,7 @@ onUnmounted(() => {
   }
 
   .log-content {
-    font-size: 14px;
+    font-size: 11px;
     padding: 8px;
     max-height: 300px;
   }
