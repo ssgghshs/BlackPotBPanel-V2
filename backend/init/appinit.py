@@ -136,6 +136,36 @@ async def create_local_docker_node():
     finally:
         await db.close()
 
+async def create_container_appstore():  
+    """创建默认容器应用商店"""
+    db = ContainerAsyncSessionLocal()
+    try:
+        from sqlalchemy import select
+        result = await db.execute(select(container_models.Store).filter(
+            container_models.Store.name == "default"
+        ))
+        existing = result.scalar_one_or_none()
+        if not existing:
+            store = container_models.Store(
+                title="default",
+                name="default",
+                type="one_panel",
+                url="https://gitee.com/ssgghshs/panel-container-appstore",
+                apps=None,
+                total=0,
+            )
+            db.add(store)
+            await db.commit()
+            logger.info("Default container app store created successfully!")
+        else:
+            logger.info("Default container app store already exists.")
+    except Exception as e:
+        logger.error(f"Error creating default container app store: {e}")
+        await db.rollback()
+    finally:
+        await db.close()
+
+
 
 async def generate_bp_ssh_keypair_and_install():
     db = AsyncSessionLocal()
@@ -368,4 +398,5 @@ def run_initialization():
         asyncio.run(create_admin_user())
         asyncio.run(create_localhost_host())
         asyncio.run(create_local_docker_node())
+        asyncio.run(create_container_appstore())
         asyncio.run(generate_bp_ssh_keypair_and_install())
