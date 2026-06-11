@@ -1,9 +1,9 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from config.database import ContainerBase
 from config.settings import settings
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
 import pytz
 
@@ -89,4 +89,50 @@ class DockerNode(ContainerBase):
                 config['tls'] = tls_config
         
         return config
+
+
+class Store(ContainerBase):
+    """应用商店源模型
+    支持多种商店类型：one_panel, casaos
+    """
+    __tablename__ = "stores"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    title = Column(String(255), nullable=False, comment="商店标题")
+    name = Column(String(255), nullable=False, unique=True, index=True, comment="商店标识名")
+    type = Column(String(50), nullable=False, comment="商店类型: one_panel, casaos")
+    url = Column(String(500), nullable=False, comment="商店远程地址")
+    apps = Column(JSON, nullable=True, comment="商店应用列表（JSON）")
+    total = Column(Integer, nullable=True, default=0, comment="应用总数")
+    created_at = Column(DateTime, nullable=False, default=get_localized_datetime, comment="创建时间")
+    updated_at = Column(DateTime, nullable=False, default=get_localized_datetime, onupdate=get_localized_datetime, comment="更新时间")
+
+    def __repr__(self):
+        return f"<Store(id={self.id}, name='{self.name}', type='{self.type}')>"
+
+
+class StoreDeploy(ContainerBase):
+    """应用商店部署记录"""
+    __tablename__ = "store_deploys"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    task_name = Column(String(255), nullable=False, unique=True, index=True, comment="Compose 任务名")
+    title = Column(String(255), nullable=False, comment="应用标题")
+    store_id = Column(Integer, nullable=False, comment="关联商店源 ID")
+    store_name = Column(String(255), nullable=False, comment="商店标识名")
+    store_type = Column(String(50), nullable=False, comment="商店类型")
+    app_name = Column(String(255), nullable=False, comment="应用标识名")
+    version_name = Column(String(255), nullable=False, comment="部署版本")
+    compose_file = Column(String(500), nullable=False, comment="docker-compose.yml 目标路径")
+    project_path = Column(String(500), nullable=False, default="", comment="compose 项目工作目录")
+    environment = Column(JSON, nullable=True, comment="环境变量列表")
+    node_id = Column(Integer, nullable=False, default=0, comment="Docker 节点 ID，0=本地")
+    status = Column(String(20), nullable=False, default="deploying", comment="状态: deploying/running/stopped/error")
+    message = Column(Text, nullable=True, comment="错误信息")
+    log = Column(Text, nullable=True, comment="部署日志输出")
+    operation_id = Column(String(64), nullable=False, default="", comment="操作日志ID，对应 containerlog 下的日志文件")
+    created_at = Column(DateTime, nullable=False, default=get_localized_datetime, comment="创建时间")
+    updated_at = Column(DateTime, nullable=False, default=get_localized_datetime, onupdate=get_localized_datetime, comment="更新时间")
+
+    def __repr__(self):
+        return f"<StoreDeploy(id={self.id}, task_name='{self.task_name}', status='{self.status}')>"
 

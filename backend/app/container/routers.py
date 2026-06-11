@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, status, Body
+from fastapi.responses import FileResponse, PlainTextResponse
 from typing import Optional, Dict, Any
+import os
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from config.database import get_container_db
@@ -10,7 +12,7 @@ from app.container.schemas import (
     ContainerOperationResponse, ContainerStatsResponse, ImageListResponse, ImageDetailResponse,
     NetworkListResponse, NetworkDetailResponse, NetworkOperationResponse, NetworkCreate,
     VolumeListResponse, VolumeDetailResponse, VolumeOperationResponse, VolumeCreate,
-    ContainerSummary, SimplifiedContainerListResponse, ComposeProjectLogsResponse,
+    ContainerSummary, SimplifiedContainerListResponse, ComposeProjectLogsResponse, ComposeFileEditRequest,
     ImageImportRequest, ImageImportResponse, LogContentResponse, ImageDeleteRequest,
     ImageExportRequest, ImageExportResponse, ImagePruneRequest, ImagePullRequest, ImagePullResponse,
     ImagePullCancelRequest, ImageBuildRequest, ImageBuildResponse, ImageCachePruneRequest, ImageCachePruneResponse,
@@ -26,7 +28,17 @@ from app.container.schemas import (
     ContainerCommitRequest,
     ContainerCommitResponse,
     ImageTagRequest,
-    ImageTagResponse
+    ImageTagResponse,
+    StoreCreateRequest,
+    StoreUpdateRequest,
+    StoreResponse,
+    StoreListResponse,
+    StoreSyncRequest,
+    StoreSyncResponse,
+    StoreDeployRequest,
+    StoreDeployResponse,
+    StoreDeployStatusResponse,
+    StoreAppVersionDetailResponse,
 )
 from middleware.auth import get_current_active_user
 from app.container.service import DockerNodeService
@@ -34,6 +46,7 @@ from app.container.images_service import DockerImageService
 from app.container.networks_service import DockerNetworkService
 from app.container.volumes_service import DockerVolumeService
 from app.container.compose_service import DockerComposeService
+from app.container.appstore_service import AppStoreService
 from app.container.schemas import ComposeProjectList
 
 router = APIRouter(prefix="/container", tags=["container"])
@@ -888,6 +901,34 @@ async def create_compose_project(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建Compose项目失败: {str(e)}")
 
+@router.post("/nodes/{node_id}/compose/{project_name}/file/update", response_model=Dict[str, Any], summary="编辑Compose项目文件内容（docker-compose.yml + .env）")
+async def update_compose_project_file(
+    node_id: int,
+    project_name: str,
+    request: ComposeFileEditRequest,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    编辑Compose项目的 docker-compose.yml 和 .env 文件内容。
+    仅本地节点(unix_socket)支持编辑，远程节点(tcp)返回错误。
+    - **compose_content**: docker-compose.yml 新内容（必填）
+    - **env_content**: .env 文件新内容（可选）
+    - **restart_on_edit**: 编辑后是否自动重启项目（先停止再启动）
+    """
+    try:
+        result = await DockerComposeService.update_compose_file_content(
+            db, node_id, project_name,
+            compose_content=request.compose_content,
+            env_content=request.env_content,
+            restart_on_edit=request.restart_on_edit
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"编辑Compose文件失败: {str(e)}")
+
 @router.get("/nodes/{node_id}/compose/{project_name}/containers", response_model=SimplifiedContainerListResponse, summary="获取Compose项目容器列表")
 async def get_compose_project_containers(
     node_id: int,
@@ -942,4 +983,209 @@ async def delete_compose_project(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除Compose项目失败: {str(e)}")
+
+
+# ==================== 应用商店 API ====================
+
+@router.post("/store/create", response_model=StoreResponse, summary="创建商店源")
+async def create_store(
+    req: StoreCreateRequest,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """新增商店源"""
+    return await AppStoreService.create_store(db, req)
+
+
+@router.post("/store/update", response_model=StoreResponse, summary="更新商店源")
+async def update_store(
+    req: StoreUpdateRequest,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """更新商店源"""
+    return await AppStoreService.update_store(db, req)
+
+
+@router.post("/store/delete", summary="删除商店源")
+async def delete_store(
+    store_id: int = Body(..., embed=True),
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """删除商店源（同时删除本地数据文件）"""
+    await AppStoreService.delete_store(db, store_id)
+    return {"message": "商店源删除成功"}
+
+
+@router.get("/store/list", response_model=StoreListResponse, summary="获取商店源列表")
+async def list_stores(
+    title: Optional[str] = Query(None, description="按标题筛选"),
+    name: Optional[str] = Query(None, description="按标识名筛选"),
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """获取商店源列表，可选携带应用数据"""
+    return await AppStoreService.list_stores(db, title=title, name=name)
+
+
+@router.post("/store/sync", response_model=StoreSyncResponse, summary="同步商店源")
+async def sync_store(
+    req: StoreSyncRequest,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """同步远程应用商店数据"""
+    return await AppStoreService.sync_store(db, req)
+
+
+@router.get("/store/{name}/icon/{icon_path:path}", summary="获取商店应用图标")
+async def get_store_icon(
+    name: str,
+    icon_path: str,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """根据商店标识名和应用图标路径返回图标文件"""
+    # 从数据库查找商店
+    from config.settings import settings
+    from sqlalchemy import select
+    from app.container.models import Store
+    
+    result = await db.execute(select(Store).where(Store.name == name))
+    store = result.scalar_one_or_none()
+    if not store:
+        raise HTTPException(status_code=404, detail="商店不存在")
+    
+    # 构建图标完整路径：STORE_ROOT / store.title / icon_path
+    store_root = settings.APP_CONTAINER_STORE_PATH
+    file_path = os.path.normpath(os.path.join(store_root, store.title, icon_path))
+    
+    # 安全检查：确保路径在 store_root 目录下
+    if not file_path.startswith(os.path.normpath(store_root)):
+        raise HTTPException(status_code=403, detail="非法路径")
+    
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="图标文件不存在")
+    
+    return FileResponse(file_path)
+
+
+@router.get("/store/{name}/readme/{file_path:path}", summary="获取商店应用 markdown 内容")
+async def get_store_readme(
+    name: str,
+    file_path: str,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """根据商店标识名和 markdown 文件路径返回文件内容"""
+    from config.settings import settings
+    from sqlalchemy import select
+    from app.container.models import Store
+    
+    result = await db.execute(select(Store).where(Store.name == name))
+    store = result.scalar_one_or_none()
+    if not store:
+        raise HTTPException(status_code=404, detail="商店不存在")
+    
+    store_root = settings.APP_CONTAINER_STORE_PATH
+    file_full = os.path.normpath(os.path.join(store_root, store.title, file_path))
+    
+    if not file_full.startswith(os.path.normpath(store_root)):
+        raise HTTPException(status_code=403, detail="非法路径")
+    
+    if not os.path.isfile(file_full):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    
+    try:
+        with open(file_full, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        with open(file_full, "r", encoding="gbk") as f:
+            content = f.read()
+    
+    return PlainTextResponse(content)
+
+
+# ==================== 商店部署 API ====================
+
+
+@router.get("/store/app/{store_id}/{app_name}/version/{version_name}/detail", response_model=StoreAppVersionDetailResponse, summary="获取商店应用版本详情")
+async def get_store_app_version_detail(
+    store_id: int,
+    app_name: str,
+    version_name: str,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """获取商店应用版本的 docker-compose.yml 内容和环境变量配置"""
+    return await AppStoreService.get_version_detail(db, store_id, app_name, version_name)
+
+
+@router.post("/store/deploy", response_model=StoreDeployResponse, summary="部署商店应用")
+async def deploy_store_app(
+    req: StoreDeployRequest,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """部署商店应用（复制文件 + docker compose up）"""
+    return await AppStoreService.deploy(db, req)
+
+
+@router.post("/store/deploy/{deploy_id}/redeploy", response_model=StoreDeployResponse, summary="重新部署应用")
+async def redeploy_store_app(
+    deploy_id: int,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """重新部署已部署的应用
+
+    复用原有部署记录的所有参数（商店、应用、版本、环境变量、节点），
+    创建一个新的部署记录并自动启动后台部署任务。
+    原部署记录不会被删除或修改。
+    """
+    return await AppStoreService.redeploy_deploy(db, deploy_id)
+
+
+@router.get("/store/deploy/list", response_model=List[StoreDeployResponse], summary="获取部署记录列表")
+async def list_store_deploys(
+    node_id: Optional[int] = Query(None, description="按 Docker 节点 ID 筛选"),
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """获取商店应用部署记录列表"""
+    return await AppStoreService.list_deploys(db, node_id=node_id)
+
+
+@router.post("/store/deploy/{deploy_id}/destroy", summary="销毁部署的应用")
+async def destroy_store_deploy(
+    deploy_id: int,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """销毁已部署的应用（docker compose down + 删除文件 + 删除记录）"""
+    await AppStoreService.destroy_deploy(db, deploy_id)
+    return {"message": "应用已销毁"}
+
+
+@router.get("/store/deploy/{deploy_id}/status", response_model=StoreDeployStatusResponse, summary="获取部署状态")
+async def get_store_deploy_status(
+    deploy_id: int,
+    db: AsyncSession = Depends(get_container_db),
+    current_user = Depends(get_current_active_user),
+):
+    """轮询获取商店应用部署状态"""
+    record = await AppStoreService.get_deploy_status(db, deploy_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="部署记录不存在")
+    return StoreDeployStatusResponse(
+        id=record.id,
+        task_name=record.task_name,
+        status=record.status,
+        message=record.message or "",
+        updated_at=record.updated_at.isoformat() if record.updated_at else "",
+    )
+
+
+
 

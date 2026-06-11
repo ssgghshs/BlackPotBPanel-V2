@@ -404,12 +404,21 @@ class ComposeProjectSummary(BaseModel):
     updated_at: Optional[str] = Field(None, description="更新时间")
     containerCount: int = Field(0, description="总容器数")
     runningCount: int = Field(0, description="运行中的容器数")
+    compose_content: str = Field("", description="docker-compose.yml 文件内容")
+    env_content: str = Field("", description=".env 文件内容")
 
 
 class ComposeProjectList(BaseModel):
     """Compose项目列表响应模型"""
     items: List[ComposeProjectSummary]
     total: int
+
+
+class ComposeFileEditRequest(BaseModel):
+    """编辑Compose文件内容请求模型"""
+    compose_content: str = Field(..., description="docker-compose.yml 新内容")
+    env_content: Optional[str] = Field(None, description=".env 文件新内容")
+    restart_on_edit: bool = Field(False, description="编辑后是否自动重启项目")
 
 
 class NetworkOption(BaseModel):
@@ -621,3 +630,161 @@ class LocalDockerStatusResponse(BaseModel):
     version: Optional[str] = Field(None, description="Docker版本号")
     node_id: Optional[int] = Field(None, description="对应的本地Docker节点ID（如果已注册）")
     message: str = Field("", description="状态描述信息")
+
+
+# ==================== 应用商店 Schemas ====================
+
+class StoreEnvItem(BaseModel):
+    """环境变量项"""
+    label: str = Field("", description="环境变量标签")
+    labels: Dict[str, str] = Field(default_factory=dict, description="多语言标签")
+    name: str = Field("", description="环境变量名")
+    value: str = Field("", description="默认值")
+    required: bool = Field(False, description="是否必填")
+    type: str = Field("text", description="字段类型: text, number, select, password")
+
+
+class StoreAppVersionItem(BaseModel):
+    """应用版本项"""
+    name: str = Field(..., description="版本名")
+    compose_file: Optional[str] = Field(None, description="docker-compose.yml 路径")
+    environment: List[StoreEnvItem] = Field(default_factory=list, description="环境变量")
+    script: Dict[str, str] = Field(default_factory=dict, description="脚本文件映射，如 {install.sh: scripts/install.sh}")
+    download: Optional[str] = Field(None, description="模板下载地址")
+    default: bool = Field(False, description="是否为默认版本")
+    ref: Optional[str] = Field(None, description="引用版本名")
+
+
+class StoreAppItem(BaseModel):
+    """应用商店中的应用项"""
+    name: str = Field(..., description="应用标识名")
+    title: Optional[str] = Field(None, description="应用标题")
+    description: Optional[str] = Field(None, description="应用描述")
+    descriptions: Dict[str, str] = Field(default_factory=dict, description="多语言描述")
+    logo: Optional[str] = Field(None, description="应用Logo URL")
+    content: Optional[str] = Field(None, description="介绍内容")
+    contents: Dict[str, str] = Field(default_factory=dict, description="多语言介绍")
+    tags: List[str] = Field(default_factory=list, description="应用标签")
+    website: Optional[str] = Field(None, description="应用官网")
+    versions: Dict[str, StoreAppVersionItem] = Field(default_factory=dict, description="版本列表")
+
+
+class StoreAppVersionDetailResponse(BaseModel):
+    """商店应用版本详情响应"""
+    compose_content: str = Field("", description="docker-compose.yml 原始内容")
+    environment: List[StoreEnvItem] = Field(default_factory=list, description="环境变量（含默认值）")
+
+
+class StoreCreateRequest(BaseModel):
+    """创建商店源请求"""
+    title: str = Field(..., min_length=1, max_length=255, description="商店标题")
+    name: str = Field(..., min_length=1, max_length=255, description="商店标识名")
+    type: str = Field(..., description="商店类型: one_panel, casaos")
+    url: str = Field("", max_length=500, description="商店远程地址")
+    apps: List[StoreAppItem] = Field(default_factory=list, description="自定义应用列表")
+
+
+class StoreUpdateRequest(BaseModel):
+    """更新商店源请求"""
+    id: int = Field(..., description="商店ID")
+    title: str = Field(..., min_length=1, max_length=255, description="商店标题")
+    name: str = Field(..., min_length=1, max_length=255, description="商店标识名")
+    type: str = Field(..., description="商店类型: one_panel, casaos")
+    url: str = Field("", max_length=500, description="商店远程地址")
+    apps: List[StoreAppItem] = Field(default_factory=list, description="自定义应用列表")
+
+
+class StoreResponse(BaseModel):
+    """商店源响应"""
+    id: int
+    title: str
+    name: str
+    type: str
+    url: str
+    apps: List[StoreAppItem] = Field(default_factory=list, description="应用列表")
+    total: int = Field(0, description="应用总数")
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class StoreListResponse(BaseModel):
+    """商店源列表响应"""
+    items: List[StoreResponse]
+    total: int
+
+
+class StoreSyncRequest(BaseModel):
+    """同步商店源请求"""
+    title: str = Field("", description="商店标题（新建时使用）")
+    name: str = Field(..., min_length=1, description="商店标识名")
+    type: str = Field(..., description="商店类型: one_panel, casaos")
+    url: str = Field("", description="商店远程地址")
+
+
+class StoreSyncResponse(BaseModel):
+    """同步商店源响应"""
+    name: str
+    type: str
+    apps: List[StoreAppItem] = Field(default_factory=list, description="同步后的应用列表")
+    total: int = Field(0, description="应用总数")
+
+
+# ==================== 商店部署 Schemas ====================
+
+# 占位符常量（与 dpanel 对齐）
+PLACEHOLDER_APP_NAME = "%APP_NAME%"
+PLACEHOLDER_APP_VERSION = "%APP_VERSION%"
+PLACEHOLDER_APP_TASK_NAME = "%APP_TASK_NAME%"
+PLACEHOLDER_CURRENT_DATE = "%CURRENT_DATE%"
+
+# 商店类型对应的私有网络名
+STORE_NETWORK_MAP = {
+    "one_panel": "1panel-network",
+}
+
+
+class StoreDeployEnvironment(BaseModel):
+    """部署时提交的环境变量"""
+    name: str = Field("", description="环境变量名")
+    value: str = Field("", description="环境变量值")
+
+
+class StoreDeployRequest(BaseModel):
+    """商店部署请求"""
+    store_id: int = Field(..., description="商店源 ID")
+    app_name: str = Field(..., description="应用标识名")
+    app_title: str = Field(..., description="应用标题")
+    version_name: str = Field(..., description="版本名")
+    task_name: str = Field(..., min_length=1, max_length=255, description="Compose 任务名")
+    environment: List[StoreDeployEnvironment] = Field(default_factory=list, description="用户填写的环境变量")
+    node_id: int = Field(0, description="Docker 节点 ID，0=本地")
+
+
+class StoreDeployResponse(BaseModel):
+    """商店部署响应"""
+    id: int
+    task_name: str
+    title: str
+    store_name: str
+    store_type: str
+    app_name: str
+    version_name: str
+    status: str
+    message: str = ""
+    created_at: str
+    operation_id: str = ""
+    running: bool = True
+
+
+class StoreDeployStatusResponse(BaseModel):
+    """商店部署状态响应（用于轮询）"""
+    id: int
+    task_name: str
+    status: str
+    message: str = ""
+    updated_at: str
+
+

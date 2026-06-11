@@ -86,7 +86,7 @@
               <icon-bookmark/>
               {{ t('log') }}
             </a-doption>
-            <a-doption key="logs" @click="openFileManager(record.path)" :disabled="record.compose_file === 'notfound'">
+            <a-doption key="edit" @click="handleEditCompose(record)" :disabled="record.compose_file === 'notfound'">
                 <icon-edit />
                 {{ t('edit') }}
               </a-doption>
@@ -143,6 +143,16 @@
     @created="handleProjectCreated"
   />
   
+  <!-- Compose编辑抽屉组件 -->
+  <compose-edit
+    v-model:visible="showEditDrawer"
+    :node-id="selectedHostId"
+    :project-name="editProjectData.name"
+    :compose-content="editProjectData.compose_content"
+    :env-content="editProjectData.env_content"
+    @updated="handleProjectUpdated"
+  />
+  
   <!-- 删除Compose确认对话框 -->
   <a-modal 
     v-model:visible="deleteModalVisible" 
@@ -167,12 +177,20 @@ import FileCat from '../../components/file/FileCat.vue';
 import ComposeLog from '../../components/container/ComposeLog.vue';
 import ComposeContainers from '../../components/container/ComposeContainers.vue';
 import ComposeCreate from '../../components/container/ComposeCreate.vue';
+import ComposeEdit from '../../components/container/ComposeEdit.vue';
 
 // 响应式数据
 const composeList = ref([]);
 const loading = ref(false);
 const selectedHostId = ref(null);
 const showCreateDrawer = ref(false);
+// Compose编辑抽屉
+const showEditDrawer = ref(false);
+const editProjectData = reactive({
+  name: '',
+  compose_content: '',
+  env_content: ''
+});
 // FileCat相关状态
 const showFileManager = ref(false);
 const selectedFilePath = ref('');
@@ -581,6 +599,25 @@ onMounted(() => {
 
 // 处理项目创建成功
 const handleProjectCreated = () => {
+  // 刷新Compose项目列表
+  fetchComposeList(selectedHostId.value, pagination.current);
+};
+
+// 处理编辑Compose项目
+const handleEditCompose = (project) => {
+  if (!selectedHostId.value) {
+    Message.warning(t.value('pleaseSelectHost'));
+    return;
+  }
+
+  editProjectData.name = project.name;
+  editProjectData.compose_content = project.compose_content || '';
+  editProjectData.env_content = project.env_content || '';
+  showEditDrawer.value = true;
+};
+
+// 处理项目编辑成功
+const handleProjectUpdated = () => {
   // 刷新Compose项目列表
   fetchComposeList(selectedHostId.value, pagination.current);
 };

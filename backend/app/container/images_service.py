@@ -388,7 +388,17 @@ class DockerImageService:
                     if os.path.exists(alt_log2):
                         log_file_path = alt_log2
                     else:
-                        raise HTTPException(status_code=404, detail="操作ID不存在")
+                        # 支持 deploy_ 前缀的日志文件（商店应用部署）
+                        alt_log3 = os.path.join(cls._LOG_DIR, f"deploy_{operation_id}.log")
+                        if os.path.exists(alt_log3):
+                            log_file_path = alt_log3
+                        else:
+                            # 直接以 operation_id 命名的日志文件
+                            alt_log4 = os.path.join(cls._LOG_DIR, f"{operation_id}.log")
+                            if os.path.exists(alt_log4):
+                                log_file_path = alt_log4
+                            else:
+                                raise HTTPException(status_code=404, detail="操作ID不存在")
         else:
             log_file_path = cls._operations[operation_id]['log_file']
         

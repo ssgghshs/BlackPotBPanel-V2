@@ -8,7 +8,7 @@
     >
       <div class="sider-header">
         <!-- 预留区域 -->
-        <img src="/favicon.png" alt="Logo" class="logo-image" :class="{ 'collapsed': isMenuCollapsed }" />
+        <img src="/favicon.png" alt="Logo" class="logo-image" draggable="false" :class="{ 'collapsed': isMenuCollapsed }" />
       </div>
       <NavigationMenu @collapse="onMenuCollapse" @close="toggleMobileMenu" />
     </div>

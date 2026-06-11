@@ -125,10 +125,12 @@ class Settings(BaseSettings):
     CRONAB_LOG_PATH: str = f"{_BASE_PANEL}/crontab/logs/"
     #面板临时文件夹
     TEMP_PATH: str = f"{_BASE_PANEL}/tmp/"
-
-
     # 备份配置
     BACKUP_PATH: str = f"{_BASE_PANEL}/backup/database/"
+    #应用商店路径
+    APP_CONTAINER_STORE_PATH: str = f"{_BASE_PANEL}/appstore/container/"
+
+
 
 
     class Config:

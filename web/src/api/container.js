@@ -474,6 +474,17 @@ export function createComposeProject(nodeId, data) {
     })
 }
 
+// 编辑Compose项目文件内容（docker-compose.yml + .env）
+export function updateComposeProjectFile(nodeId, projectName, data) {
+    return request({
+        url: `/container/nodes/${nodeId}/compose/${projectName}/file/update`,
+        method: 'post',
+        data,
+    })
+}
+
+
+
 // 删除Compose项目
 export function deleteComposeProject(nodeId, projectName) {
     return request({
@@ -495,6 +506,112 @@ export function restartComposeProject(nodeId, projectName) {
 export function checkLocalDockerStatus() {
     return request({
         url: '/container/local-docker/status',
+        method: 'get',
+    })
+}
+
+
+// ==================== 应用商店 API ====================
+
+// 创建商店源
+export function createStore(data) {
+    return request({
+        url: '/container/store/create',
+        method: 'post',
+        data,
+    })
+}
+
+// 更新商店源
+export function updateStore(data) {
+    return request({
+        url: '/container/store/update',
+        method: 'post',
+        data,
+    })
+}
+
+// 删除商店源
+export function deleteStore(data) {
+    return request({
+        url: '/container/store/delete',
+        method: 'post',
+        data,
+    })
+}
+
+// 获取商店源列表
+export function listStores(params) {
+    return request({
+        url: '/container/store/list',
+        method: 'get',
+        params,
+    })
+}
+
+// 同步商店源
+export function syncStore(data) {
+    return request({
+        url: '/container/store/sync',
+        method: 'post',
+        data,
+    })
+}
+
+// 商店部署
+export function deployStoreApp(data) {
+    return request({
+        url: '/container/store/deploy',
+        method: 'post',
+        data,
+    })
+}
+
+// 获取部署记录列表
+export function listStoreDeploys(params) {
+    return request({
+        url: '/container/store/deploy/list',
+        method: 'get',
+        params,
+    })
+}
+
+// 销毁部署的应用
+export function destroyStoreDeploy(deployId) {
+    return request({
+        url: `/container/store/deploy/${deployId}/destroy`,
+        method: 'post',
+    })
+}
+
+// 获取部署状态（轮询）
+export function getStoreDeployStatus(deployId) {
+    return request({
+        url: `/container/store/deploy/${deployId}/status`,
+        method: 'get',
+    })
+}
+
+// 重新部署应用（复用原有参数，创建新部署记录）
+export function redeployStoreDeploy(deployId) {
+    return request({
+        url: `/container/store/deploy/${deployId}/redeploy`,
+        method: 'post',
+    })
+}
+
+// 获取部署日志（复用容器操作日志接口）
+export function getStoreDeployLog(operationId) {
+    return request({
+        url: `/container/operations/${operationId}/log/read`,
+        method: 'get',
+    })
+}
+
+// 获取商店应用版本详情（compose YAML + 环境变量）
+export function getStoreAppVersionDetail(storeId, appName, versionName) {
+    return request({
+        url: `/container/store/app/${storeId}/${appName}/version/${versionName}/detail`,
         method: 'get',
     })
 }

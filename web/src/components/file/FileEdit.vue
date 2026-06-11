@@ -756,6 +756,20 @@ const openFile = (currentFile, fileItem) => {
 };
 
 // 获取文件树形数据
+// 排序函数：文件夹在前，文件在后，同类型按字母排序
+const sortFileNodes = (nodes) => {
+  if (!nodes || !Array.isArray(nodes)) return [];
+  return [...nodes].sort((a, b) => {
+    const aDir = a.is_directory || a.isLeaf === false;
+    const bDir = b.is_directory || b.isLeaf === false;
+    if (aDir && !bDir) return -1;
+    if (!aDir && bDir) return 1;
+    const nameA = a.filename || a.title || a.key || '';
+    const nameB = b.filename || b.title || b.key || '';
+    return nameA.localeCompare(nameB);
+  });
+};
+
 const getFileTreeData = () => {
   if (!activeFile.value || !activeFile.value.fileList) return [];
   
@@ -777,35 +791,28 @@ const getFileTreeData = () => {
       key: node.filename,
       title: node.filename,
       filename: node.filename,
-      full_path: fullPath, // 添加完整路径信息
+      full_path: fullPath,
       is_directory: node.is_directory,
       size: node.size,
       modified_time: node.modified_time,
       permissions: node.permissions,
       user: node.user,
       group: node.group,
-      children: [],
-      isLeaf: !node.is_directory // 文件是叶子节点，目录不是
+      isLeaf: !node.is_directory
     };
+    // 注意：有意不设置 children，Arco Tree 通过 children 是否为 undefined
+    // 来判断是否需要调用 loadMore 懒加载。设为 [] 会导致点击展开图标无反应。
     
-    // 如果是目录且有子节点，则保留子节点数据
-    if (node.children && Array.isArray(node.children) && node.is_directory) {
-      // 检查是否已经加载过子节点内容
-      if (node.children.length > 0) {
-        // 如果已经有子节点数据，则使用这些数据
-        adaptedNode.children = node.children.map(child => convertTreeNode(child, fullPath));
-      } else {
-        // 如果没有子节点数据，保持空数组以保持可展开状态
-        adaptedNode.children = [];
-      }
+    // 如果是目录且有预加载的子节点，则递归转换
+    if (node.children && Array.isArray(node.children) && node.is_directory && node.children.length > 0) {
+      adaptedNode.children = sortFileNodes(node.children).map(child => convertTreeNode(child, fullPath));
     }
     
     return adaptedNode;
   };
   
-  // 只转换当前目录的直接子项，而不是显示根目录本身
-  // 传递当前文件的路径作为父路径
-  const treeData = currentDir.children.map(child => convertTreeNode(child, activeFile.value.filePath));
+  // 排序后转换
+  const treeData = sortFileNodes(currentDir.children).map(child => convertTreeNode(child, activeFile.value.filePath));
   
   return treeData;
 };
@@ -840,29 +847,22 @@ const loadMore = async (nodeData) => {
           key: node.filename,
           title: node.filename,
           filename: node.filename,
-          full_path: nodeFullPath, // 添加完整路径信息
+          full_path: nodeFullPath,
           is_directory: node.is_directory,
           size: node.size,
           modified_time: node.modified_time,
           permissions: node.permissions,
           user: node.user,
           group: node.group,
-          children: [],
-          isLeaf: !node.is_directory // 文件是叶子节点，目录不是
+          isLeaf: !node.is_directory
         };
-        
-        // 只有目录才可能有子节点，但我们也只显示一层
-        if (node.children && Array.isArray(node.children) && node.is_directory) {
-          // 目录节点保留children属性，但不填充具体内容
-          // 这样可以保持目录的可展开状态，但不会自动展开
-          adaptedNode.children = []; // 不自动填充子节点
-        }
+        // 注意：不设置 children，让 Arco Tree 通过调用 loadMore 懒加载子节点
         
         return adaptedNode;
       };
       
-      // 转换子节点，传递父节点的完整路径
-      return response.data.children.map(child => convertTreeNode(child, fullPath));
+      // 转换子节点，传递父节点的完整路径，排序后再返回
+      return sortFileNodes(response.data.children).map(child => convertTreeNode(child, fullPath));
     }
     
     return [];
@@ -1508,12 +1508,28 @@ watch(showSidebar, (newValue) => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid #2d2d2d; /* 固定深色边框 */
-  color: #cccccc; /* 固定文字颜色 */
-  background-color: #1e1e1e; /* 固定深色背景 */
-  font-weight: 500;
+  border-bottom: 1px solid #2d2d2d;
+  color: #cccccc;
+  background-color: #1e1e1e;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.sidebar-header .sidebar-title {
+  color: #bbbbbb;
+}
+
+.sidebar-header .arco-btn {
+  color: #808080;
   font-size: 12px;
-  flex-shrink: 0; /* 防止头部被压缩 */
+}
+
+.sidebar-header .arco-btn:hover {
+  color: #cccccc;
+  background-color: #2a2d2e;
 }
 
 .sidebar-content {
@@ -1551,42 +1567,89 @@ watch(showSidebar, (newValue) => {
 }
 
 .sidebar-content::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .sidebar-content::-webkit-scrollbar-thumb {
-  background-color: #555; /* 滚动条颜色 */
-  border-radius: 4px;
+  background-color: #424242;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
 }
 
 .sidebar-content::-webkit-scrollbar-track {
-  background-color: #2d2d2d; /* 滚动条轨道颜色 */
+  background-color: transparent;
 }
 
 .file-tree {
-  background-color: #1e1e1e; /* 固定深色背景 */
-  color: #cccccc; /* 固定文字颜色 */
-  min-height: 100%; /* 确保树组件占据整个容器高度 */
+  background-color: #1e1e1e;
+  color: #cccccc;
+  min-height: 100%;
+  padding: 4px 0;
+  font-size: 13px;
 }
 
 .file-tree :deep(.arco-tree-node) {
   padding: 2px 0;
+  border-radius: 0;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.file-tree :deep(.arco-tree-node:hover) {
+  background-color: #2a2d2e;
 }
 
 .file-tree :deep(.arco-tree-node-selected) {
-  background-color: #37373d; /* 固定选中背景色 */
+  background-color: #37373d !important;
 }
 
 .file-tree :deep(.arco-tree-node-title) {
-  color: #cccccc; /* 固定文字颜色 */
+  color: #cccccc;
+  font-size: 13px;
+  line-height: 22px;
+  padding: 0 4px;
+}
+
+.file-tree :deep(.arco-tree-node-title:hover) {
+  color: #ffffff;
+}
+
+/* 展开/折叠箭头样式 */
+.file-tree :deep(.arco-tree-node-switcher) {
+  color: #808080;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.file-tree :deep(.arco-tree-node-switcher:hover) {
+  color: #cccccc;
+}
+
+/* 文件图标与文字间距 */
+.file-tree :deep(.arco-tree-node-title .tree-node) {
+  gap: 6px;
+}
+
+.file-tree :deep(.arco-tree-icon) {
+  display: none;
 }
 
 .tree-node {
   display: flex;
   align-items: center;
   width: 100%;
-  max-width: 180px; /* 限制树节点最大宽度 */
   overflow: hidden;
+  gap: 6px;
+}
+
+.tree-node .file-icon {
+  flex-shrink: 0;
+  font-size: 14px;
 }
 
 .file-item-name {
@@ -1594,8 +1657,7 @@ watch(showSidebar, (newValue) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 160px; /* 限制最大宽度 */
-  color: #cccccc; /* 固定文字颜色 */
+  color: #cccccc;
 }
 
 /* 响应式文件树 */

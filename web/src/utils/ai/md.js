@@ -129,8 +129,8 @@ export function renderMessage(content) {
       continue
     }
 
-    // 表格分隔行
-    if (/^\|[\s\-:]+\|$/.test(trimmed)) continue
+    // 表格分隔行（支持多列，如 | --- | :---: | ---: |）
+    if (/^\|[\s\-:]+(\|[\s\-:]+)*\|$/.test(trimmed)) continue
 
     // 表格行
     if (/^\|.*\|$/.test(trimmed) && trimmed.startsWith('|') && trimmed.endsWith('|')) {

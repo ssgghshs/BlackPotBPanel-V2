@@ -12,6 +12,7 @@ const routes = [
       {path: 'container', name: 'Container', component: () => import('../views/container/Base.vue'),redirect: '/container/overview', meta: { title: '容器管理', noAuditor: true },
         children: [
           {path: 'overview', name: 'Overview', component: () => import('../views/container/Overview.vue'), meta: { title: '基本概况' }} ,
+          {path: 'appstore', name: 'Appstore', component: () => import('../views/container/Appstore.vue'), meta: { title: '应用商店' }} ,
           {path: 'containers', name: 'Containers', component: () => import('../views/container/Containers.vue'), meta: { title: '容器列表' }} ,
           {path: 'images', name: 'Images', component: () => import('../views/container/Images.vue'), meta: { title: '镜像管理' }} ,
           {path: 'networks', name: 'Networks', component: () => import('../views/container/Networks.vue'), meta: { title: '网络管理' }} ,

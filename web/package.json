@@ -18,6 +18,8 @@
     "echarts-gl": "^2.0.9",
     "echarts5": "npm:echarts@^5.6.0",
     "element-plus": "^2.11.4",
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.5",
     "monaco-editor": "^0.54.0",
     "router": "^2.2.0",
     "vite-plugin-monaco-editor": "^1.1.0",

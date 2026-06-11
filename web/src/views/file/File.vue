@@ -1006,9 +1006,9 @@ const getCurrentPath = (key) => {
 
 const getTabTitle = (key) => {
   const currentPath = getCurrentPath(key);
-  if (!currentPath || currentPath === '/') return '/';
+  if (!currentPath || currentPath === '/') return '📁 /';
   const parts = currentPath.split('/').filter(p => p !== '');
-  return parts.length > 0 ? parts[parts.length - 1] : '/';
+  return parts.length > 0 ? '📁 ' + parts[parts.length - 1] : '📁 /';
 };
 
 // 检查图标项是否被选中

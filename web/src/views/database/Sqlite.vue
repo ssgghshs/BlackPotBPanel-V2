@@ -222,7 +222,7 @@
     />
 
     <!-- 文件浏览组件 -->
-    <file-cat
+    <FileCat2
       :visible="showFileCat"
       :initial-path="selectedFilePath"
       @update:visible="(val) => { showFileCat = val }"
@@ -247,7 +247,7 @@ import {
   restoreSqliteBackup
 } from '../../api/database';
 import MiniFileManager from '../../components/file/MiniFileManager.vue';
-import FileCat from '../../components/file/FileCat.vue';
+import FileCat2 from '../../components/file/FileCat2.vue';
 
 const router = useRouter();
 const loading = ref(false);

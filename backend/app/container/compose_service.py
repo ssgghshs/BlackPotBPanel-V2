@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import logging
 import yaml
@@ -116,7 +117,41 @@ class DockerComposeService:
             
             # 转换为响应模型
             project_items = []
+            loop = asyncio.get_event_loop()
             for project in all_projects:
+                # 读取文件内容（仅当 compose_path 存在时尝试本地读取）
+                compose_content = ''
+                env_content = ''
+                if node.compose_path:
+                    project_dir = project['path']
+                    # docker-compose.yml
+                    compose_file_path = os.path.join(project_dir, 'docker-compose.yml')
+                    if await loop.run_in_executor(None, os.path.isfile, compose_file_path):
+                        try:
+                            compose_content = await loop.run_in_executor(
+                                None, lambda: open(compose_file_path, 'r', encoding='utf-8').read()
+                            )
+                        except Exception:
+                            pass
+                    if not compose_content:
+                        compose_file_path = os.path.join(project_dir, 'docker-compose.yaml')
+                        if await loop.run_in_executor(None, os.path.isfile, compose_file_path):
+                            try:
+                                compose_content = await loop.run_in_executor(
+                                    None, lambda: open(compose_file_path, 'r', encoding='utf-8').read()
+                                )
+                            except Exception:
+                                pass
+                    # .env
+                    env_file_path = os.path.join(project_dir, '.env')
+                    if await loop.run_in_executor(None, os.path.isfile, env_file_path):
+                        try:
+                            env_content = await loop.run_in_executor(
+                                None, lambda: open(env_file_path, 'r', encoding='utf-8').read()
+                            )
+                        except Exception:
+                            pass
+                
                 project_items.append(ComposeProjectSummary(
                     name=project['name'],
                     path=project['path'],
@@ -126,7 +161,9 @@ class DockerComposeService:
                     created_at=project['created_at'],
                     updated_at=project['updated_at'],
                     containerCount=project.get('containerCount', 0),
-                    runningCount=project.get('runningCount', 0)
+                    runningCount=project.get('runningCount', 0),
+                    compose_content=compose_content,
+                    env_content=env_content
                 ))
             
             result = ComposeProjectList(
@@ -950,6 +987,99 @@ class DockerComposeService:
             raise HTTPException(status_code=500, detail=f"获取Compose项目日志时发生错误: {str(e)}")
     
     @staticmethod
+    async def update_compose_file_content(db: AsyncSession, node_id: int, project_name: str,
+                                          compose_content: str, env_content: str = None,
+                                          restart_on_edit: bool = False) -> Dict[str, Any]:
+        """
+        编辑Compose项目的 docker-compose.yml 和 .env 文件内容
+        仅当 compose_path 已配置时支持编辑（节点不限本地/远程）
+        
+        Args:
+            db: 数据库会话
+            node_id: Docker节点ID
+            project_name: Compose项目名称
+            compose_content: docker-compose.yml 新内容
+            env_content: .env 文件新内容（可选）
+            restart_on_edit: 编辑后是否自动重启项目
+            
+        Returns:
+            Dict: 操作结果
+        """
+        # 获取节点信息
+        node = await db.get(DockerNode, node_id)
+        if not node:
+            raise ValueError(f"节点ID {node_id} 不存在")
+        
+        # 远程节点不支持编辑
+        if not node.compose_path:
+            raise ValueError("节点未配置Compose路径")
+        
+        project_dir = os.path.join(node.compose_path, project_name)
+        loop = asyncio.get_event_loop()
+        
+        # 检查项目目录是否存在
+        exists = await loop.run_in_executor(None, os.path.isdir, project_dir)
+        if not exists:
+            raise ValueError(f"Compose项目 {project_name} 目录不存在")
+        
+        # 检查 docker-compose.yml 是否存在
+        compose_file = os.path.join(project_dir, 'docker-compose.yml')
+        compose_exists = await loop.run_in_executor(None, os.path.isfile, compose_file)
+        if not compose_exists:
+            compose_file = os.path.join(project_dir, 'docker-compose.yaml')
+            compose_exists = await loop.run_in_executor(None, os.path.isfile, compose_file)
+        if not compose_exists:
+            raise ValueError(f"Compose项目 {project_name} 未找到 docker-compose.yml/yaml 文件")
+        
+        # 写入 compose 文件
+        try:
+            await loop.run_in_executor(
+                None, lambda: open(compose_file, 'w', encoding='utf-8').write(compose_content)
+            )
+        except Exception as e:
+            raise ValueError(f"写入compose文件失败: {str(e)}")
+        
+        # 写入 .env 文件（如果提供了内容）
+        env_file = os.path.join(project_dir, '.env')
+        if env_content is not None:
+            try:
+                await loop.run_in_executor(
+                    None, lambda: open(env_file, 'w', encoding='utf-8').write(env_content)
+                )
+            except Exception as e:
+                raise ValueError(f"写入.env文件失败: {str(e)}")
+        else:
+            # env_content 为空字符串时也写入（清空文件）
+            env_exists = await loop.run_in_executor(None, os.path.isfile, env_file)
+            if env_exists:
+                # 保留现有 .env 文件不变
+                pass
+        
+        result = {
+            "status": "success",
+            "message": f"Compose项目 {project_name} 文件更新成功",
+            "project_name": project_name,
+            "compose_file": compose_file,
+            "env_file": env_file if env_content is not None else None
+        }
+        
+        # 如果需要自动重启
+        if restart_on_edit:
+            try:
+                # 先停止项目
+                await DockerComposeService.stop_compose_project(db, node_id, project_name)
+                # 再启动项目
+                start_result = await DockerComposeService.start_compose_project(db, node_id, project_name)
+                result["restart_result"] = start_result
+            except Exception as e:
+                result["restart_result"] = {
+                    "status": "error",
+                    "error": str(e)
+                }
+        
+        return result
+    
+    @staticmethod
     async def start_compose_project(db: AsyncSession, node_id: int, project_name: str) -> Dict[str, Any]:
         """
         启动指定的Docker Compose项目
@@ -1583,3 +1713,170 @@ class DockerComposeService:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"停止Compose项目时发生错误: {str(e)}")
+
+    @staticmethod
+    async def compose_deploy(
+        node: DockerNode,
+        compose_file: str,
+        project_name: str,
+        project_path: str,
+        env_vars: Optional[Dict[str, str]] = None,
+        pull_image: bool = True,
+        log_file: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """部署 Compose 项目（docker compose up -d）
+
+        Args:
+            node: Docker 节点对象
+            compose_file: docker-compose.yml 绝对路径
+            project_name: compose 项目名（-p 参数）
+            project_path: compose 项目工作目录
+            env_vars: 环境变量字典（写入 .env 文件）
+            pull_image: 是否先拉取镜像
+            log_file: 可选的日志文件路径，用于实时输出
+
+        Returns:
+            Dict: 部署结果
+        """
+        loop = asyncio.get_event_loop()
+
+        def build_base_cmd() -> List[str]:
+            """构建基础 docker 命令（含远程节点参数）"""
+            base = [get_docker_command()]
+            endpoint_type = getattr(node, 'endpoint_type', '')
+            endpoint_url = getattr(node, 'endpoint_url', '')
+            use_tls = getattr(node, 'use_tls', False)
+            ca_cert = getattr(node, 'ca_cert', '')
+            client_cert = getattr(node, 'client_cert', '')
+            client_key = getattr(node, 'client_key', '')
+            if endpoint_type == 'tcp' and endpoint_url:
+                if endpoint_url.startswith('tcp://'):
+                    remote_url = endpoint_url
+                elif endpoint_url.startswith('http://') or endpoint_url.startswith('https://'):
+                    remote_url = f"tcp://{endpoint_url.split('://')[1]}"
+                else:
+                    remote_url = f"tcp://{endpoint_url}"
+                base.extend(['-H', remote_url])
+                if use_tls:
+                    if ca_cert:
+                        base.extend(['--tlsverify', '--tlscacert', ca_cert])
+                    if client_cert:
+                        base.extend(['--tlscert', client_cert])
+                    if client_key:
+                        base.extend(['--tlskey', client_key])
+            return base
+
+        def build_compose_cmd() -> List[str]:
+            """构建 compose 基础命令（含 -p -f）"""
+            return ['compose', '-p', project_name, '-f', compose_file]
+
+        def run_and_log(cmd: List[str], step_name: str, timeout: int = 600) -> None:
+            """执行命令并实时写入日志文件（智能压缩进度条输出）"""
+            log_fh = None
+            if log_file:
+                log_fh = open(log_file, "a", encoding="utf-8")
+            try:
+                header = f"--- {step_name} ---\n"
+                if log_fh:
+                    log_fh.write(header)
+                    log_fh.flush()
+
+                # 跟踪每层的最新进度百分比，避免重复刷行
+                _layer_progress: Dict[str, int] = {}
+                _progress_pat = re.compile(
+                    r'^([a-f0-9]{12,})\s+Downloading\s+.*?(\d+)%'
+                )
+
+                def should_log_progress(layer_id: str, pct: int) -> bool:
+                    """对 Downloading 进度条: 0%记录, 之后每10%记录一次, 100%记录"""
+                    if pct == 100:
+                        return True
+                    last = _layer_progress.get(layer_id, -1)
+                    if last == -1:
+                        return True  # 首次出现
+                    # 每次跨越10%刻度才记录
+                    if pct // 10 != last // 10:
+                        return True
+                    return False
+
+                process = subprocess.Popen(
+                    cmd,
+                    cwd=project_path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                while True:
+                    line_bytes = process.stdout.readline()
+                    if not line_bytes:
+                        break
+                    raw = line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if not raw:
+                        continue
+                    # 取最后一个 \r 分段（最新的进度值）
+                    clean = raw.split("\r")[-1].strip()
+                    if not clean:
+                        continue
+
+                    # 进度条去重：只记录每10%节点
+                    m = _progress_pat.search(clean)
+                    if m:
+                        layer_id, pct_str = m.group(1), int(m.group(2))
+                        if should_log_progress(layer_id, pct_str):
+                            _layer_progress[layer_id] = pct_str
+                            if log_fh:
+                                log_fh.write(clean + "\n")
+                                log_fh.flush()
+                    else:
+                        # 非进度行直接写入
+                        if log_fh:
+                            log_fh.write(clean + "\n")
+                            log_fh.flush()
+
+                process.wait(timeout=timeout)
+                if process.returncode != 0:
+                    raise Exception(f"{step_name} 失败 (exit={process.returncode})")
+            finally:
+                if log_fh:
+                    log_fh.close()
+
+        def deploy_sync():
+            try:
+                base_cmd = build_base_cmd()
+                compose_cmd = build_compose_cmd()
+
+                # 1. 写入 .env 文件
+                if env_vars:
+                    dotenv_path = os.path.join(project_path, ".env")
+                    with open(dotenv_path, "w", encoding="utf-8") as f:
+                        for k, v in env_vars.items():
+                            f.write(f"{k}={v}\n")
+
+                # 2. 拉取镜像（独立步骤，显示进度）
+                if pull_image:
+                    pull_cmd = base_cmd + compose_cmd + ["pull"]
+                    logger.info(f"Pulling images for {project_name}")
+                    run_and_log(pull_cmd, "拉取镜像", timeout=600)
+
+                # 3. 部署（up -d，不带 --pull）
+                up_cmd = base_cmd + compose_cmd + ["up", "-d", "--build"]
+                logger.info(f"Starting containers for {project_name}")
+                run_and_log(up_cmd, "启动容器", timeout=600)
+
+                return {
+                    "status": "success",
+                    "message": f"Compose project {project_name} deployed successfully",
+                    "project_name": project_name,
+                }
+
+            except subprocess.TimeoutExpired:
+                logger.error(f"Compose project {project_name} deploy timeout")
+                raise Exception("部署超时，请检查项目配置")
+            except Exception as e:
+                logger.error(f"Compose project {project_name} deploy error: {str(e)}")
+                raise
+
+        try:
+            result = await loop.run_in_executor(None, deploy_sync)
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"部署Compose项目时发生错误: {str(e)}")

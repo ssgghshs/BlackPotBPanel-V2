@@ -27,10 +27,15 @@
             v-model="selectedHost" 
             @change="onHostChange" 
             placeholder="请选择容器宿主"
-            :style="{ minWidth: '150px' }"
+            :style="{ minWidth: '180px' }"
           >
-            <AOption v-for="host in containerHosts" :key="host.id" :value="host.id">
-              {{ host.name }} 
+            <AOption v-for="host in containerHosts" :key="host.id" :value="host.id" :disabled="!getNodeOnline(host.id)">
+              <div class="host-option">
+                <span v-if="getNodeOnline(host.id)" class="host-dot host-dot-online"></span>
+                <span v-else class="host-dot host-dot-offline"></span>
+                {{ host.name }}
+                <span v-if="!getNodeOnline(host.id)" class="host-offline-label">{{ t('offline') }}</span>
+              </div>
             </AOption>
           </ASelect>
         </div>
@@ -56,7 +61,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { t } from '../../utils/locale';
 import { useRouter } from 'vue-router';
-import { getContainerNodes, checkLocalDockerStatus } from '../../api/container';
+import { getContainerNodes, checkLocalDockerStatus, getContainerNodeStatus } from '../../api/container';
 import { Select as ASelect, Option as AOption, Button as AButton } from '@arco-design/web-vue';
 import { ReloadOutlined } from '@ant-design/icons-vue';
 
@@ -66,6 +71,7 @@ const dockerHint = ref({ status: 'warning', title: '', subtitle: '' });
 
 const menuItems = computed(() => [
   { to: '/container/overview', label: t.value('overview') },
+  { to: '/container/appstore', label: t.value('containerApp') },
   { to: '/container/containers', label: t.value('containers') },
   { to: '/container/images', label: t.value('images') },
   { to: '/container/networks', label: t.value('networks') },
@@ -112,6 +118,12 @@ const containerHosts = ref([]);
 const selectedHost = ref(null);
 const router = useRouter();
 const isRefreshing = ref(false); // 添加刷新状态标识
+const nodeStatusMap = ref({}); // 节点在线状态缓存 { nodeId: true/false }
+
+// 获取节点在线状态
+const getNodeOnline = (nodeId) => {
+  return nodeStatusMap.value[nodeId] !== false;
+};
 
 // 刷新容器宿主列表的函数
 const refreshContainerHosts = async () => {
@@ -121,25 +133,44 @@ const refreshContainerHosts = async () => {
     // 根据后端API返回的DockerNodeList格式，正确获取节点数组
     containerHosts.value = response.items || [];
     
-    // 如果有宿主数据，确保选中的宿主ID仍然有效
+    // 并行检查每个节点的在线状态
     if (containerHosts.value.length > 0) {
-      // 检查当前选中的宿主ID是否在新列表中
+      const statusPromises = containerHosts.value.map(async (host) => {
+        try {
+          const statusRes = await getContainerNodeStatus(host.id);
+          nodeStatusMap.value[host.id] = statusRes.is_online === true;
+        } catch {
+          nodeStatusMap.value[host.id] = false;
+        }
+      });
+      await Promise.all(statusPromises);
+    }
+    
+    // 如果有宿主数据，确保选中的宿主ID仍然有效且在线
+    if (containerHosts.value.length > 0) {
+      // 检查当前选中的宿主ID是否在线
       const currentSelectedHost = containerHosts.value.find(host => host.id === selectedHost.value);
       
-      if (!currentSelectedHost) {
-        // 如果当前选中的宿主不存在于新列表中，则选择第一个或从localStorage恢复
+      if (!currentSelectedHost || !getNodeOnline(selectedHost.value)) {
+        // 如果当前选中的宿主不存在或不在线，则选择第一个在线节点
+        const onlineHost = containerHosts.value.find(host => getNodeOnline(host.id));
         const savedHostId = localStorage.getItem('selectedContainerHostId');
-        const savedHost = savedHostId ? containerHosts.value.find(host => host.id.toString() === savedHostId) : null;
+        const savedHost = savedHostId ? containerHosts.value.find(host => host.id.toString() === savedHostId && getNodeOnline(host.id)) : null;
         
         if (savedHost) {
           selectedHost.value = savedHost.id;
-        } else {
-          selectedHost.value = containerHosts.value[0].id;
+        } else if (onlineHost) {
+          selectedHost.value = onlineHost.id;
           localStorage.setItem('selectedContainerHostId', selectedHost.value);
+        } else {
+          selectedHost.value = '';
+          localStorage.removeItem('selectedContainerHostId');
         }
         
         // 当重新选择宿主时，触发事件通知子组件
-        emitHostChange(selectedHost.value);
+        if (selectedHost.value) {
+          emitHostChange(selectedHost.value);
+        }
       }
     } else {
       // 如果没有宿主数据，清除选择
@@ -179,11 +210,12 @@ const onHostChange = () => {
   // 通知其他组件宿主已更改
   emitHostChange(selectedHost.value);
   
-  // 根据需要刷新当前页面的数据
-  const currentPath = router.currentRoute.value.path;
-  if (currentPath.includes('/container/')) {
-    router.go(0); // 简单的刷新方式，实际应用中可能需要更优雅的方式
-  }
+  // 通过 router.replace 刷新当前页面数据而非全量刷新
+  const currentRoute = router.currentRoute.value;
+  router.replace({
+    path: currentRoute.path,
+    query: { _t: Date.now() }
+  }).catch(() => {});
 };
 </script>
 
@@ -229,6 +261,30 @@ body[arco-theme="dark"] .host-selector .arco-btn:hover {
   font-size: 14px;
   color: #666;
   white-space: nowrap;
+}
+
+/* 宿主选项样式 */
+.host-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.host-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.host-dot-online {
+  background-color: rgb(var(--green-5));
+  box-shadow: 0 0 4px rgba(var(--green-5), 0.5);
+}
+.host-dot-offline {
+  background-color: rgb(var(--red-5));
+}
+.host-offline-label {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 </style>
 
@@ -354,5 +410,29 @@ body[arco-theme="dark"] .horizontal-menu a.router-link-active,
 body[arco-theme="dark"] .horizontal-menu a.router-link-exact-active {
   background-color: rgba(64, 132, 255, 0.2) !important;
   color: #3c7eff !important;
+}
+
+/* 宿主选项（非scoped，因 AOption 渲染在 teleport 外部） */
+.host-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.host-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.host-dot-online {
+  background-color: rgb(var(--green-5));
+  box-shadow: 0 0 4px rgba(var(--green-5), 0.5);
+}
+.host-dot-offline {
+  background-color: rgb(var(--red-5));
+}
+.host-offline-label {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 </style>
