@@ -326,9 +326,9 @@ const handleConfirmRestartPanel = async () => {
   showRestartPanelModal.value = false;
   try {
     await restartService();
-    Message.success(t.value('操作成功，面板正在重启...'));
+    Message.success(t.value('restarting'));
   } catch (error) {
-    Message.error(t.value('重启面板失败') + ': ' + (error.message || ''));
+    Message.error(t.value('failed') + ': ' + (error.message || ''));
   }
 };
 
