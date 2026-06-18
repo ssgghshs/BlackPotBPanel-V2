@@ -80,6 +80,34 @@ class DailyRotatingFileHandler(logging.FileHandler):
             pass
 
 
+class ColoredFormatter(logging.Formatter):
+    """
+    仅对日志级别标识 [INFO] [WARNING] [ERROR] 添加 ANSI 颜色，其余内容保持原色：
+    - DEBUG:    灰色
+    - INFO:     绿色
+    - WARNING:  橙/黄色
+    - ERROR:    红色
+    - CRITICAL: 红色加粗
+    """
+    LEVEL_COLORS = {
+        logging.DEBUG:    '\033[90m',   # 灰色
+        logging.INFO:     '\033[32m',   # 绿色
+        logging.WARNING:  '\033[33m',   # 橙/黄色
+        logging.ERROR:    '\033[31m',   # 红色
+        logging.CRITICAL: '\033[1;31m', # 红色加粗
+    }
+    RESET = '\033[0m'
+
+    def format(self, record):
+        original_levelname = record.levelname
+        color = self.LEVEL_COLORS.get(record.levelno, '')
+        if color:
+            record.levelname = f'{color}{original_levelname}{self.RESET}'
+        formatted = super().format(record)
+        record.levelname = original_levelname  # 还原，避免影响其他 handler
+        return formatted
+
+
 # 确保日志目录存在
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -102,6 +130,7 @@ LOGGING_CONFIG = {
             "datefmt": "%Y-%m-%d %H:%M:%S",
         },
         "detailed": {
+            "()": "config.logging_config.ColoredFormatter",
             "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S",
         }
@@ -128,7 +157,7 @@ LOGGING_CONFIG = {
             "class": "config.logging_config.DailyRotatingFileHandler",
             "log_dir": LOG_DIR,
             "backup_count": 30,
-            "formatter": "access",
+            "formatter": "detailed",  # 与 file handler 统一使用 detailed 格式
             "encoding": "utf-8",
         },
     },
