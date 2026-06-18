@@ -1903,5 +1903,8 @@
   "editFailed": "編集失敗",
   "redeploy": "再デプロイ",
   "redeploySuccess": "再デプロイ成功",
-  "redeployFailed": "再デプロイ失敗"
+  "redeployFailed": "再デプロイ失敗",
+  "stopContainerFailed": "コンテナ停止失敗",
+  "pauseContainerFailed": "コンテナ一時停止失敗",
+  "restartContainerFailed": "コンテナ再起動失敗"
 }

@@ -1915,5 +1915,8 @@
   "editFailed": "編輯失敗",
   "redeploy": "重新部署",
   "redeploySuccess": "重新部署成功",
-  "redeployFailed": "重新部署失敗"
+  "redeployFailed": "重新部署失敗",
+  "stopContainerFailed": "停止容器失敗",
+  "pauseContainerFailed": "暫停容器失敗",
+  "restartContainerFailed": "重新啟動容器失敗"
 }

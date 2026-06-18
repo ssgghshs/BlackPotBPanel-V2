@@ -1904,5 +1904,8 @@
   "editFailed": "편집 실패",
   "redeploy": "재배포",
   "redeploySuccess": "재배포 성공",
-  "redeployFailed": "재배포 실패"
+  "redeployFailed": "재배포 실패",
+  "stopContainerFailed": "컨테이너 정지 실패",
+  "pauseContainerFailed": "컨테이너 일시정지 실패",
+  "restartContainerFailed": "컨테이너 재시작 실패"
 }  

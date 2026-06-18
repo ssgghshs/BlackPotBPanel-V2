@@ -1883,5 +1883,8 @@
   "editFailed": "Edit failed",
   "redeploy": "Redeploy",
   "redeploySuccess": "Redeploy successful",
-  "redeployFailed": "Redeploy failed"
+  "redeployFailed": "Redeploy failed",
+  "stopContainerFailed": "Stop container failed",
+  "pauseContainerFailed": "Pause container failed",
+  "restartContainerFailed": "Restart container failed"
 }
