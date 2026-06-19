@@ -663,6 +663,20 @@ class SSHLogReader:
         "/var/log/sshd.log",     # 自定义路径
     ]
     
+    # ===== 预编译正则表达式（模块加载时编译一次，避免每次调用重新编译）=====
+    _TS_PATTERN = r'(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+)'
+    _PROC_PATTERN = r'sshd(?:-session)?\[\d+\]'
+    
+    _SUCCESS_RE = re.compile(
+        r'(' + _TS_PATTERN + r')\s+[^\s]+\s+' + _PROC_PATTERN + r':\s+Accepted\s+(password|publickey)\s+for\s+(\w+)\s+from\s+([\d\.]+)\s+port\s+(\d+)'
+    )
+    _FAILED_RE = re.compile(
+        r'(' + _TS_PATTERN + r')\s+[^\s]+\s+' + _PROC_PATTERN + r':\s+Failed\s+(password|publickey)\s+for\s+(?:invalid\s+user\s+)?(\w+)?\s+from\s+([\d\.]+)\s+port\s+(\d+)'
+    )
+    
+    # journalctl 最大读取行数，防止全量加载导致 OOM
+    JOURNALCTL_MAX_LINES = 20000
+    
     @staticmethod
     def find_ssh_log_file() -> str:
         """查找SSH日志文件路径
@@ -689,7 +703,7 @@ class SSHLogReader:
     
     @staticmethod
     def parse_ssh_log_entry(log_line: str) -> dict:
-        """解析单行SSH日志条目
+        """解析单行SSH日志条目（使用预编译正则，性能提升显著）
         
         支持两种时间戳格式：
         - ISO 8601: 2026-06-03T16:32:04.571038+08:00 (journalctl)
@@ -702,22 +716,15 @@ class SSHLogReader:
         Returns:
             dict: 解析后的日志条目字典，如果不是SSH登录日志则返回None
         """
+        # 快速预过滤：不包含 sshd 的行直接跳过
+        if 'sshd' not in log_line:
+            return None
         
-        # 通用时间戳模式：匹配 ISO 8601 或 syslog 格式
-        ts_pattern = r'(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+)'
-        # 进程名: sshd 或 sshd-session
-        proc_pattern = r'sshd(?:-session)?\[\d+\]'
-        
-        # 尝试解析成功登录
-        success_pattern = r'(' + ts_pattern + r')\s+[^\s]+\s+' + proc_pattern + r':\s+Accepted\s+(password|publickey)\s+for\s+(\w+)\s+from\s+([\d\.]+)\s+port\s+(\d+)'
-        success_match = re.search(success_pattern, log_line)
-        
+        # 尝试解析成功登录（使用预编译正则）
+        success_match = SSHLogReader._SUCCESS_RE.search(log_line)
         if success_match:
-            raw_time = success_match.group(1)
-            formatted_time = SSHLogReader._format_log_time(raw_time)
-            
             return {
-                "time": formatted_time,
+                "time": SSHLogReader._format_log_time(success_match.group(1)),
                 "method": success_match.group(2),
                 "username": success_match.group(3),
                 "ip": success_match.group(4),
@@ -726,17 +733,12 @@ class SSHLogReader:
                 "raw": log_line
             }
         
-        # 尝试解析失败登录
-        failed_pattern = r'(' + ts_pattern + r')\s+[^\s]+\s+' + proc_pattern + r':\s+Failed\s+(password|publickey)\s+for\s+(?:invalid\s+user\s+)?(\w+)?\s+from\s+([\d\.]+)\s+port\s+(\d+)'
-        failed_match = re.search(failed_pattern, log_line)
-        
+        # 尝试解析失败登录（使用预编译正则）
+        failed_match = SSHLogReader._FAILED_RE.search(log_line)
         if failed_match:
             username = failed_match.group(3) if failed_match.group(3) else "invalid"
-            raw_time = failed_match.group(1)
-            formatted_time = SSHLogReader._format_log_time(raw_time)
-            
             return {
-                "time": formatted_time,
+                "time": SSHLogReader._format_log_time(failed_match.group(1)),
                 "method": failed_match.group(2),
                 "username": username,
                 "ip": failed_match.group(4),
@@ -749,7 +751,7 @@ class SSHLogReader:
     
     @staticmethod
     def get_ssh_logs(start: int = 0, limit: int = 100, keyword: str = None, status: str = None) -> tuple[list, int]:
-        """获取SSH登录日志
+        """获取SSH登录日志（优化版：使用 tail 限制行数，流式读取避免全量加载）
         
         Args:
             start: 起始索引
@@ -761,39 +763,40 @@ class SSHLogReader:
             tuple[list, int]: (日志条目列表, 总条数)
         """
         try:
-            # 查找日志文件
             log_path = SSHLogReader.find_ssh_log_file()
             if not log_path:
                 logger.error("未找到SSH日志文件")
                 return [], 0
             
-            # 读取日志文件内容
-            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                log_lines = f.readlines()
+            # 使用 tail 只读取最近的日志行，避免全量加载大文件
+            max_lines = 20000
+            try:
+                result = subprocess.run(
+                    ['tail', '-n', str(max_lines), log_path],
+                    capture_output=True, text=True, timeout=10
+                )
+                raw_lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
+            except (FileNotFoundError, subprocess.SubprocessError):
+                # tail 不可用时 fallback 到 Python 逐行读取最后 N 行
+                raw_lines = SSHLogReader._read_last_n_lines(log_path, max_lines)
             
             # 解析和过滤日志
             parsed_logs = []
-            for line in reversed(log_lines):  # 倒序读取，最新的在前面
+            for line in reversed(raw_lines):  # 倒序，最新的在前面
                 parsed = SSHLogReader.parse_ssh_log_entry(line.strip())
-                if parsed:
-                    # 应用过滤条件
-                    match_keyword = True
-                    match_status = True
-                    
-                    if keyword:
-                        match_keyword = (keyword.lower() in parsed['username'].lower() or 
-                                        keyword.lower() in parsed['ip'].lower())
-                    
-                    if status:
-                        match_status = (parsed['status'] == status)
-                    
-                    if match_keyword and match_status:
-                        parsed_logs.append(parsed)
+                if not parsed:
+                    continue
+                # 应用过滤条件
+                if keyword:
+                    kw = keyword.lower()
+                    if kw not in parsed['username'].lower() and kw not in parsed['ip'].lower():
+                        continue
+                if status and parsed['status'] != status:
+                    continue
+                parsed_logs.append(parsed)
             
-            # 计算总数和分页
             total = len(parsed_logs)
             paginated_logs = parsed_logs[start:start + limit]
-            
             return paginated_logs, total
             
         except PermissionError:
@@ -802,6 +805,31 @@ class SSHLogReader:
         except Exception as e:
             logger.error(f"获取SSH登录日志失败: {e}")
             return [], 0
+    
+    @staticmethod
+    def _read_last_n_lines(file_path: str, n: int) -> list:
+        """高效读取文件最后 N 行（不加载整个文件到内存）"""
+        lines = []
+        try:
+            with open(file_path, 'rb') as f:
+                # 从文件末尾向前读取
+                f.seek(0, 2)  # 移到文件末尾
+                file_size = f.tell()
+                block_size = 8192
+                buffer = b''
+                pos = file_size
+                
+                while pos > 0 and len(lines) < n:
+                    read_size = min(block_size, pos)
+                    pos -= read_size
+                    f.seek(pos)
+                    buffer = f.read(read_size) + buffer
+                    lines = buffer.split(b'\n')
+                
+                # 解码并返回
+                return [line.decode('utf-8', errors='ignore') for line in lines[-n:]]
+        except Exception:
+            return []
     
     @staticmethod
     def _format_log_time(raw_time: str) -> str:
@@ -874,20 +902,15 @@ class SSHLogReader:
             parsed_logs = []
             for line in reversed(log_lines):
                 parsed = SSHLogReader.parse_ssh_log_entry(line.strip())
-                if parsed:
-                    # 应用过滤条件
-                    match_keyword = True
-                    match_status = True
-                    
-                    if keyword:
-                        match_keyword = (keyword.lower() in parsed['username'].lower() or 
-                                        keyword.lower() in parsed['ip'].lower())
-                    
-                    if status:
-                        match_status = (parsed['status'] == status)
-                    
-                    if match_keyword and match_status:
-                        parsed_logs.append(parsed)
+                if not parsed:
+                    continue
+                if keyword:
+                    kw = keyword.lower()
+                    if kw not in parsed['username'].lower() and kw not in parsed['ip'].lower():
+                        continue
+                if status and parsed['status'] != status:
+                    continue
+                parsed_logs.append(parsed)
             
             # 计算总数和分页
             total = len(parsed_logs)
@@ -904,12 +927,12 @@ class SSHLogReader:
     
     @staticmethod
     def get_ssh_logs_by_journalctl(start: int = 0, limit: int = 100, keyword: str = None, status: str = None) -> tuple[list, int]:
-        """使用 systemd-journalctl 获取SSH登录日志（适用于使用 systemd-journald 的系统）
+        """使用 systemd-journalctl 获取SSH登录日志（优化版：加 -n 限制行数）
         
         方案：
-        1. journalctl _COMM=sshd _COMM=sshd-session --no-pager --output=short-iso
-        2. 如果失败，尝试 journalctl -u sshd --no-pager --output=short-iso
-        3. 如果还失败，尝试 journalctl -u ssh.service --no-pager --output=short-iso
+        1. journalctl _COMM=sshd _COMM=sshd-session --no-pager -n 20000
+        2. 如果失败，尝试 journalctl -u sshd -n 20000
+        3. 如果还失败，尝试 journalctl -u ssh.service -n 20000
         
         Args:
             start: 起始索引
@@ -920,10 +943,11 @@ class SSHLogReader:
         Returns:
             tuple[list, int]: (日志条目列表, 总条数)
         """
+        max_lines = SSHLogReader.JOURNALCTL_MAX_LINES
         journalctl_cmds = [
-            ["journalctl", "_COMM=sshd", "_COMM=sshd-session", "--no-pager", "--output=short-iso"],
-            ["journalctl", "-u", "sshd", "--no-pager", "--output=short-iso"],
-            ["journalctl", "-u", "ssh.service", "--no-pager", "--output=short-iso"],
+            ["journalctl", "_COMM=sshd", "_COMM=sshd-session", "--no-pager", f"-n{max_lines}", "--output=short-iso"],
+            ["journalctl", "-u", "sshd", "--no-pager", f"-n{max_lines}", "--output=short-iso"],
+            ["journalctl", "-u", "ssh.service", "--no-pager", f"-n{max_lines}", "--output=short-iso"],
         ]
         
         for cmd in journalctl_cmds:
@@ -936,19 +960,15 @@ class SSHLogReader:
                     parsed_logs = []
                     for line in reversed(log_lines):
                         parsed = SSHLogReader.parse_ssh_log_entry(line.strip())
-                        if parsed:
-                            match_keyword = True
-                            match_status = True
-                            
-                            if keyword:
-                                match_keyword = (keyword.lower() in parsed['username'].lower() or 
-                                                keyword.lower() in parsed['ip'].lower())
-                            
-                            if status:
-                                match_status = (parsed['status'] == status)
-                            
-                            if match_keyword and match_status:
-                                parsed_logs.append(parsed)
+                        if not parsed:
+                            continue
+                        if keyword:
+                            kw = keyword.lower()
+                            if kw not in parsed['username'].lower() and kw not in parsed['ip'].lower():
+                                continue
+                        if status and parsed['status'] != status:
+                            continue
+                        parsed_logs.append(parsed)
                     
                     total = len(parsed_logs)
                     paginated_logs = parsed_logs[start:start + limit]

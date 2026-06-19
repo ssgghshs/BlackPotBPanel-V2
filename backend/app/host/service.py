@@ -438,55 +438,87 @@ async def get_local_authorized_keys_file() -> schemas.SSHAuthKeysFile:
 async def get_ssh_intrusion_info() -> schemas.SSHIntrusionInfo:
     """获取SSH登录入侵统计信息
     
-    统计SSH登录日志中的成功/失败次数，包括累计和今天的数据。
+    复用 SSHLogReader 统计成功/失败次数，确保与 /ssh/log 接口数据一致。
     
     Returns:
         schemas.SSHIntrusionInfo: 包含错误/成功次数的统计信息
     """
-    import subprocess
     import os
+    import functools
     from datetime import datetime
 
-    # 确定日志文件路径
-    if os.path.exists("/var/log/auth.log"):
-        log_path = "/var/log/auth.log"
-        today_str = datetime.now().strftime("%Y-%m-%d")
-    elif os.path.exists("/var/log/secure"):
-        log_path = "/var/log/secure"
-        today_str = datetime.now().strftime("%b %d").lstrip("0").replace(" 0", " ")
-    else:
-        log_path = "/var/log/message"
-        today_str = datetime.now().strftime("%b %d").lstrip("0").replace(" 0", " ")
-
-    def _run_count(pattern: str, today_only: bool = False) -> int:
-        """同步执行shell命令统计匹配行数"""
-        cmd = (
-            f"ls -tr {log_path}* | grep -v '\\.gz$' | xargs cat 2>/dev/null"
-            f" | grep -aE '({pattern})'"
-        )
-        if today_only:
-            cmd += f" | grep -a '{today_str}'"
-        cmd += " | wc -l"
-        try:
-            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
-            return int(proc.stdout.strip())
-        except (ValueError, subprocess.TimeoutExpired, OSError):
-            return 0
-
     try:
+        from utils.ssh_utils import SSHLogReader
+        
         loop = asyncio.get_event_loop()
-        error, success, today_error, today_success = await asyncio.gather(
-            loop.run_in_executor(None, _run_count, "Failed password"),
-            loop.run_in_executor(None, _run_count, "Accepted"),
-            loop.run_in_executor(None, _run_count, "Failed password", True),
-            loop.run_in_executor(None, _run_count, "Accepted", True),
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        
+        # 获取所有日志（使用与 /ssh/log 相同的 SSHLogReader，保证数据一致性）
+        # 方案1：优先 journalctl
+        all_logs, total = await loop.run_in_executor(
+            None,
+            functools.partial(
+                SSHLogReader.get_ssh_logs_by_journalctl,
+                start=0,
+                limit=100000,  # 获取全部用于统计
+                keyword=None,
+                status=None
+            )
         )
-
+        
+        # 方案2：fallback 到文件读取
+        if not all_logs:
+            all_logs, total = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    SSHLogReader.get_ssh_logs,
+                    start=0,
+                    limit=100000,
+                    keyword=None,
+                    status=None
+                )
+            )
+        
+        # 方案3：fallback 到命令行工具
+        if not all_logs:
+            all_logs, total = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    SSHLogReader.get_ssh_logs_by_command,
+                    start=0,
+                    limit=100000,
+                    keyword=None,
+                    status=None
+                )
+            )
+        
+        # 统计数量（使用与 /ssh/log 完全相同的解析结果）
+        success_count = 0
+        error_count = 0
+        today_success = 0
+        today_error = 0
+        
+        for log in all_logs:
+            log_time = log.get('time', '')
+            is_success = log.get('status') == 'success'
+            
+            if is_success:
+                success_count += 1
+            else:
+                error_count += 1
+            
+            # 判断是否为今天的记录
+            if log_time.startswith(today_str):
+                if is_success:
+                    today_success += 1
+                else:
+                    today_error += 1
+        
         return schemas.SSHIntrusionInfo(
-            error=error or 0,
-            success=success or 0,
-            today_error=today_error or 0,
-            today_success=today_success or 0,
+            error=error_count,
+            success=success_count,
+            today_error=today_error,
+            today_success=today_success,
         )
     except Exception as e:
         logger.error(f"获取SSH入侵统计信息失败: {e}")
@@ -504,7 +536,6 @@ async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
     """
     try:
         from utils.ssh_utils import SSHLogReader
-        import geoip2.database
         import os
         import ipaddress
         import logging
@@ -555,13 +586,24 @@ async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
                 )
             )
         
-        # 获取地理位置信息的辅助函数
+        # 获取地理位置信息（优化：复用单个 GeoIP Reader 实例，且只查询当前分页的 IP）
+        geo_reader = None
+        db_path = None
+        try:
+            import geoip2.database
+            db_path = settings.GEOIP_CITY_DB_PATH
+            if not os.path.isabs(db_path):
+                db_path = os.path.abspath(db_path)
+            if os.path.exists(db_path):
+                geo_reader = geoip2.database.Reader(db_path)
+        except Exception as e:
+            logger.warning(f"初始化 GeoIP Reader 失败: {e}")
+            geo_reader = None
+        
         def get_location_from_ip(ip_address: str) -> str:
-            """通过IP地址获取地理位置信息"""
+            """通过IP地址获取地理位置信息（复用 geo_reader 实例）"""
             if not ip_address or ip_address in ["127.0.0.1", "localhost", "::1"]:
                 return "Local Address"
-            
-            # 检查是否为内网地址
             try:
                 ip = ipaddress.ip_address(ip_address)
                 if ip.is_private:
@@ -569,24 +611,15 @@ async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
             except ValueError:
                 return "Invalid IP"
             
+            if not geo_reader:
+                return "未知位置"
+            
             try:
-                # 使用 settings 中的 GEOIP_CITY_DB_PATH
-                db_path = settings.GEOIP_CITY_DB_PATH
-                if not os.path.isabs(db_path):
-                    db_path = os.path.abspath(db_path)
-
-                # 检查数据库文件是否存在
-                if not os.path.exists(db_path):
-                    logger.error(f"GeoLite2数据库文件不存在: {db_path}")
-                    return "未知位置"
-
-                # 使用GeoIP2解析IP地址
-                with geoip2.database.Reader(db_path) as reader:
-                    response = reader.city(ip_address)
-                    country = response.country.name or ""
-                    city = response.city.name or ""
-                    location = f"{country} {city}".strip()
-                    return location if location else "未知位置"
+                response = geo_reader.city(ip_address)
+                country = response.country.name or ""
+                city = response.city.name or ""
+                location = f"{country} {city}".strip()
+                return location if location else "未知位置"
             except Exception as e:
                 logger.error(f"获取地理位置信息失败: {e}")
                 return "未知位置"
@@ -607,6 +640,13 @@ async def get_ssh_logs(query: schemas.SSHLogQuery) -> schemas.SSHLogResponse:
                     area=area
                 )
             log_entries.append(entry)
+        
+        # 关闭 GeoIP Reader 释放资源
+        if geo_reader:
+            try:
+                geo_reader.close()
+            except Exception:
+                pass
         
         # 返回响应对象，使用schemas.SSHLogResponse定义的字段
         return schemas.SSHLogResponse(
@@ -668,7 +708,6 @@ async def export_ssh_logs(export_params: schemas.SSHLogExportRequest) -> tuple[b
     """
     try:
         from utils.ssh_utils import SSHLogReader
-        import geoip2.database
         import os
         import ipaddress
         import csv
@@ -704,13 +743,22 @@ async def export_ssh_logs(export_params: schemas.SSHLogExportRequest) -> tuple[b
                 )
             )
         
-        # 获取地理位置信息的辅助函数
+        # 获取地理位置信息（优化：复用单个 GeoIP Reader 实例）
+        geo_reader = None
+        try:
+            import geoip2.database
+            db_path = settings.GEOIP_CITY_DB_PATH
+            if not os.path.isabs(db_path):
+                db_path = os.path.abspath(db_path)
+            if os.path.exists(db_path):
+                geo_reader = geoip2.database.Reader(db_path)
+        except Exception:
+            geo_reader = None
+        
         def get_location_from_ip(ip_address: str) -> str:
-            """通过IP地址获取地理位置信息"""
+            """通过IP地址获取地理位置信息（复用 geo_reader 实例）"""
             if not ip_address or ip_address in ["127.0.0.1", "localhost", "::1"]:
                 return "Local Address"
-            
-            # 检查是否为内网地址
             try:
                 ip = ipaddress.ip_address(ip_address)
                 if ip.is_private:
@@ -718,23 +766,15 @@ async def export_ssh_logs(export_params: schemas.SSHLogExportRequest) -> tuple[b
             except ValueError:
                 return "Invalid IP"
             
+            if not geo_reader:
+                return "Unknown Location"
+            
             try:
-                # 使用 settings 中的 GEOIP_CITY_DB_PATH
-                db_path = settings.GEOIP_CITY_DB_PATH
-                if not os.path.isabs(db_path):
-                    db_path = os.path.abspath(db_path)
-
-                # 检查数据库文件是否存在
-                if not os.path.exists(db_path):
-                    return "Unknown Location"
-                
-                # 使用GeoIP2解析IP地址
-                with geoip2.database.Reader(db_path) as reader:
-                    response = reader.city(ip_address)
-                    country = response.country.name or ""
-                    city = response.city.name or ""
-                    location = f"{country} {city}".strip()
-                    return location if location else "Unknown Location"
+                response = geo_reader.city(ip_address)
+                country = response.country.name or ""
+                city = response.city.name or ""
+                location = f"{country} {city}".strip()
+                return location if location else "Unknown Location"
             except Exception as e:
                 logger.error(f"获取地理位置信息失败: {e}")
                 return "Unknown Location"
@@ -808,3 +848,10 @@ async def export_ssh_logs(export_params: schemas.SSHLogExportRequest) -> tuple[b
     except Exception as e:
         logger.error(f"导出SSH登录日志时发生错误: {e}")
         raise Exception(f"导出SSH登录日志失败: {str(e)}")
+    finally:
+        # 关闭 GeoIP Reader 释放资源
+        try:
+            if geo_reader:
+                geo_reader.close()
+        except Exception:
+            pass
