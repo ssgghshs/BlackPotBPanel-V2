@@ -14,7 +14,7 @@
 <p align="center">BlackPotBPanel 是一款仿照BT面板基于vue+fastapi开发的linux管理面板。</p>
 
 ## 演示环境
-(https://demo.panel.blackpotbp.cc)
+https://demo.panel.blackpotbp.cc/bpanel
 
 账号：admin
 密码：admin@123
